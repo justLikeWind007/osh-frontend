@@ -4,6 +4,7 @@ dist
 node_modules/
 *copy.vue
 dist/
+bun.lock
 
 # 缓存与临时文件 (合并自双方)
 .nuxt/
