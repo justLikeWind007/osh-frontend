@@ -4,13 +4,6 @@
       <button class="back-btn" @click="goBack">返回工具列表</button>
 
       <section v-if="tool" class="detail-hero">
-        <div class="cover-panel">
-          <div class="cover-wrap">
-            <img :src="tool.logoUrl || fallbackLogo" :alt="tool.toolName" />
-            <span class="resource-badge" :class="resourceBadgeClass">{{ resourceTypeLabel }}</span>
-          </div>
-        </div>
-
         <div class="info-panel">
           <div class="title-row">
             <div>
@@ -37,9 +30,9 @@
               <span>收藏数</span>
               <strong>{{ tool.collectionCount || 0 }}</strong>
             </div>
-            <div class="metric-card">
-              <span>权限等级</span>
-              <strong>{{ tool.level || 1 }}</strong>
+            <div v-if="isPaidTool" class="metric-card">
+              <span>剩余次数</span>
+              <strong>{{ remainingCountText }}</strong>
             </div>
             <div class="metric-card">
               <span>访问方式</span>
@@ -47,19 +40,38 @@
             </div>
           </div>
 
-          <div class="purchase-row">
-            <div class="price-block">
-              <span class="price">{{ priceText }}</span>
-              <span v-if="showOriginalPrice" class="origin">¥{{ tool.originalPrice }}</span>
-              <span v-if="Number(tool.pointCost || 0) > 0" class="point-cost">{{ tool.pointCost }} 积分/次</span>
+          <div v-if="isPaidTool" class="purchase-row">
+            <div class="quota-block">
+              <span>当前权益</span>
+              <strong>{{ purchasedStatusText }}</strong>
+              <em v-if="Number(tool.remainingCount || 0) > 0">还可使用 {{ tool.remainingCount }} 次</em>
             </div>
-            <button class="open-btn" @click="openTool">{{ openButtonText }}</button>
+          </div>
+          <div v-else class="purchase-row">
+            <div class="quota-block">
+              <span>当前权益</span>
+              <strong>{{ resourceTypeLabel }}</strong>
+            </div>
           </div>
         </div>
       </section>
 
       <section v-if="tool" class="detail-section">
-        <h2>工具信息</h2>
+        <div class="section-title-row">
+          <div>
+            <p class="section-kicker">Tool Content</p>
+            <h2>工具内容</h2>
+          </div>
+          <a
+            v-if="tool.githubUrl"
+            class="text-link"
+            :href="tool.githubUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+        </div>
         <div class="info-grid">
           <div class="info-item">
             <span>资源类型</span>
@@ -70,28 +82,60 @@
             <strong>{{ tool.goodCount || 0 }} / {{ tool.neutralCount || 0 }} / {{ tool.badCount || 0 }}</strong>
           </div>
           <div class="info-item">
-            <span>GitHub</span>
-            <a v-if="tool.githubUrl" class="text-link" :href="tool.githubUrl" target="_blank" rel="noopener noreferrer">打开地址</a>
-            <strong v-else>暂无</strong>
-          </div>
-          <div class="info-item">
-            <span>访问地址</span>
-            <a
-              v-if="toolLink"
-              class="text-link"
-              :href="toolLink"
-              :target="Number(tool.accessType) === 2 ? '_blank' : '_self'"
-              rel="noopener noreferrer"
-              @click.prevent="openTool"
-            >
-              {{ Number(tool.accessType) === 2 ? '打开第三方地址' : '进入站内路由' }}
-            </a>
-            <strong v-else>暂无</strong>
+            <span>权限等级</span>
+            <strong>{{ tool.level || 1 }}</strong>
           </div>
           <div class="info-item">
             <span>更新时间</span>
             <strong>{{ tool.updateTime || tool.createTime || '--' }}</strong>
           </div>
+        </div>
+      </section>
+
+      <section v-if="tool && isPaidTool" class="detail-section package-section">
+        <div class="section-title-row">
+          <div>
+            <p class="section-kicker">Packages</p>
+            <h2>购买套餐</h2>
+          </div>
+          <div class="quota-summary">
+            <span>剩余次数</span>
+            <strong>{{ remainingCountText }}</strong>
+          </div>
+        </div>
+
+        <div v-if="packages.length" class="package-grid">
+          <article
+            v-for="item in packages"
+            :key="item.id || item.packageName"
+            class="package-card"
+            :class="{ disabled: Number(item.status) === 0 }"
+          >
+            <div class="package-head">
+              <h3>{{ item.packageName }}</h3>
+              <span class="package-status">{{ Number(item.status) === 0 ? '已下架' : '可购买' }}</span>
+            </div>
+            <div class="package-count">
+              <strong>{{ item.useCount || 0 }}</strong>
+              <span>次使用次数</span>
+            </div>
+            <div class="package-price">
+              <span v-if="Number(item.price || 0) > 0" class="cash-price">¥{{ item.price }}</span>
+              <span v-if="Number(item.pointCost || 0) > 0" class="point-price">{{ item.pointCost }} 积分</span>
+              <span v-if="Number(item.price || 0) <= 0 && Number(item.pointCost || 0) <= 0" class="free-price">免费</span>
+            </div>
+            <button
+              class="buy-btn"
+              :disabled="Number(item.status) === 0"
+              @click="handleBuyPackage(item)"
+            >
+              {{ Number(item.status) === 0 ? '暂不可买' : '购买套餐' }}
+            </button>
+          </article>
+        </div>
+
+        <div v-else class="empty-packages">
+          暂无可购买套餐
         </div>
       </section>
     </main>
@@ -111,7 +155,6 @@ const route = useRoute();
 const router = useRouter();
 const { message } = createDiscreteApi(['message']);
 
-const fallbackLogo = 'https://07akioni.oss-cn-beijing.aliyuncs.com/07akioni.jpeg';
 const resourceTypeMap = {
   FREE: '免费',
   CASH_ONLY: '付费',
@@ -144,31 +187,18 @@ watch(
 
 const tags = computed(() => tool.value?.tags || []);
 const resourceTypeLabel = computed(() => resourceTypeMap[tool.value?.resourceType] || tool.value?.resourceType || '免费');
-const resourceBadgeClass = computed(() => {
-  const type = tool.value?.resourceType || 'FREE';
-  return {
-    free: type === 'FREE',
-    paid: type === 'CASH_ONLY' || type === 'CASH_POINT',
-    vip: type === 'VIP' || type === 'SMALL_CLASS' || type === 'INTERNAL',
-  };
-});
 const accessTypeLabel = computed(() => Number(tool.value?.accessType) === 2 ? '第三方 iframe' : '站内工具');
-const openButtonText = computed(() => Number(tool.value?.accessType) === 2 ? '打开第三方工具' : '进入工具');
-const priceText = computed(() => {
-  const price = Number(tool.value?.price || 0);
-  return price > 0 ? `¥${tool.value.price}` : '免费';
+const isPaidTool = computed(() => ['CASH_ONLY', 'CASH_POINT'].includes(tool.value?.resourceType));
+const packages = computed(() => {
+  const list = tool.value?.packages;
+  if (!Array.isArray(list)) return [];
+  return [...list].sort((a, b) => Number(b.sortOrder || 0) - Number(a.sortOrder || 0));
 });
-const showOriginalPrice = computed(() => {
-  const originalPrice = Number(tool.value?.originalPrice || 0);
-  const price = Number(tool.value?.price || 0);
-  return originalPrice > 0 && originalPrice !== price;
+const remainingCountText = computed(() => {
+  const count = Number(tool.value?.remainingCount || 0);
+  return count > 0 ? `${count} 次` : '0 次';
 });
-const toolLink = computed(() => {
-  const current = tool.value;
-  if (!current) return '';
-  if (Number(current.accessType) === 2) return current.iframeUrl || '';
-  return current.routePath || '';
-});
+const purchasedStatusText = computed(() => Number(tool.value?.remainingCount || 0) > 0 ? '已购买' : '未购买');
 
 function goBack() {
   if (window.history.length > 1) {
@@ -178,18 +208,12 @@ function goBack() {
   }
 }
 
-function openTool() {
-  const current = tool.value;
-  if (!current) return;
-  if (Number(current.accessType) === 2 && current.iframeUrl) {
-    window.open(current.iframeUrl, '_blank');
+function handleBuyPackage(item) {
+  if (Number(item?.status) === 0) {
+    message.warning('该套餐已下架');
     return;
   }
-  if (current.routePath) {
-    navigateTo(current.routePath);
-    return;
-  }
-  message.warning('该工具暂未配置访问地址');
+  message.info('购买功能待接入');
 }
 
 async function toggleFavorite() {
@@ -239,57 +263,14 @@ useHead(() => ({
 }
 .back-btn:hover { border-color: #18a058; color: #18a058; }
 .detail-hero {
-  display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 24px;
-  align-items: stretch;
+  display: block;
 }
-.cover-panel,
 .info-panel,
 .detail-section {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: linear-gradient(150deg, rgba(255,255,255,0.98), rgba(247,250,252,0.94));
   border-radius: 8px;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
-}
-.cover-panel {
-  padding: 20px;
-}
-.cover-wrap {
-  position: relative;
-  overflow: hidden;
-  height: 360px;
-  border-radius: 8px;
-  background: #eef2f7;
-}
-.cover-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.resource-badge {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  max-width: calc(100% - 32px);
-  padding: 9px 14px;
-  border-radius: 999px;
-  color: #10213a;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1;
-  backdrop-filter: blur(12px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.18);
-}
-.resource-badge.free { background: rgba(187, 247, 208, 0.92); }
-.resource-badge.paid { background: rgba(254, 240, 138, 0.94); }
-.resource-badge.vip {
-  color: #f8fafc;
-  background: rgba(79, 70, 229, 0.88);
 }
 .info-panel {
   padding: 28px;
@@ -397,45 +378,45 @@ h1 {
   justify-content: space-between;
   gap: 18px;
 }
-.price-block {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
+.quota-block {
+  display: grid;
+  gap: 5px;
 }
-.price {
-  color: #ea3f13;
-  font-size: 32px;
+.quota-block span {
+  color: #64748b;
+  font-size: 13px;
+}
+.quota-block strong {
+  color: #10213a;
+  font-size: 24px;
   font-weight: 900;
 }
-.origin {
-  color: #94a3b8;
-  text-decoration: line-through;
-}
-.point-cost {
-  color: #7c3aed;
-  font-weight: 800;
-}
-.open-btn {
-  border: 0;
-  border-radius: 8px;
-  padding: 13px 26px;
-  color: #fff;
-  background: linear-gradient(135deg, #13236f, #1d4ed8);
-  cursor: pointer;
-  font-weight: 800;
-  white-space: nowrap;
-  box-shadow: 0 14px 28px rgba(29, 78, 216, 0.24);
-}
-.open-btn:hover {
-  transform: translateY(-1px);
+.quota-block em {
+  color: #0f766e;
+  font-style: normal;
+  font-weight: 700;
 }
 .detail-section {
   margin-top: 22px;
   padding: 24px;
 }
+.section-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.section-kicker {
+  margin: 0 0 6px;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
 .detail-section h2 {
-  margin: 0 0 16px;
+  margin: 0;
   color: #10213a;
   font-size: 22px;
 }
@@ -444,26 +425,142 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
+.quota-summary {
+  min-width: 132px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  padding: 10px 14px;
+  text-align: right;
+}
+.quota-summary span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.quota-summary strong {
+  color: #047857;
+  font-size: 20px;
+  font-weight: 900;
+}
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.package-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.package-card.disabled {
+  opacity: 0.58;
+}
+.package-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.package-head h3 {
+  margin: 0;
+  color: #10213a;
+  font-size: 18px;
+  line-height: 1.35;
+}
+.package-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.package-card.disabled .package-status {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.package-count {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.package-count strong {
+  color: #0f172a;
+  font-size: 34px;
+  font-weight: 900;
+}
+.package-count span {
+  color: #64748b;
+  font-weight: 700;
+}
+.package-price {
+  min-height: 31px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cash-price {
+  color: #ea3f13;
+  font-size: 24px;
+  font-weight: 900;
+}
+.point-price {
+  color: #7c3aed;
+  font-size: 18px;
+  font-weight: 900;
+}
+.free-price {
+  color: #0f766e;
+  font-size: 22px;
+  font-weight: 900;
+}
+.buy-btn {
+  margin-top: auto;
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: #fff;
+  background: #13236f;
+  cursor: pointer;
+  font-weight: 800;
+}
+.buy-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+.empty-packages {
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 28px;
+  text-align: center;
+  font-weight: 700;
+}
 
 @media (max-width: 980px) {
   .tool-detail-page {
     padding: 14px 14px 32px;
   }
-  .detail-hero {
-    grid-template-columns: 1fr;
-  }
-  .cover-wrap {
-    height: 280px;
-  }
   .metric-grid,
   .info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .package-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 560px) {
   .title-row,
-  .purchase-row {
+  .purchase-row,
+  .section-title-row {
     flex-direction: column;
     align-items: stretch;
   }
@@ -471,11 +568,12 @@ h1 {
     font-size: 26px;
   }
   .metric-grid,
-  .info-grid {
+  .info-grid,
+  .package-grid {
     grid-template-columns: 1fr;
   }
-  .open-btn {
-    width: 100%;
+  .quota-summary {
+    text-align: left;
   }
 }
 </style>

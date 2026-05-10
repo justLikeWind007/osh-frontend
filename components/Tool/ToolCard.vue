@@ -5,7 +5,7 @@
     </div>
 
     <div class="card-cover">
-      <img :src="item.logoUrl || fallbackLogo" />
+      <div class="tool-initial">{{ toolInitial }}</div>
       <span class="resource-badge" :class="resourceBadgeClass">{{ resourceTypeLabel }}</span>
       <div class="fav-btn" @click.stop="handleFavorite">
         <n-icon size="18" :color="item.isFavorite ? '#d03050' : 'rgba(255,255,255,0.88)'">
@@ -54,8 +54,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['click', 'favorite', 'select']);
 
-const fallbackLogo = 'https://07akioni.oss-cn-beijing.aliyuncs.com/07akioni.jpeg';
 const visibleTags = computed(() => (props.item.tags || []).slice(0, 2));
+const toolInitial = computed(() => (props.item.toolName || '工').slice(0, 1));
 const resourceTypeMap = {
   FREE: '免费',
   CASH_ONLY: '付费',
@@ -133,10 +133,25 @@ const handleCardClick = () => {
 .card-cover {
   position: relative;
   height: 120px;
-  background: #eef2f7;
+  background: linear-gradient(135deg, #ecfdf5, #eef2ff);
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.card-cover img { width: 100%; height: 100%; object-fit: cover; }
+.tool-initial {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #fff;
+  color: #047857;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 800;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
 .resource-badge {
   position: absolute;
   left: 10px;

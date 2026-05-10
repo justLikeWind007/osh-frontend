@@ -22,75 +22,228 @@
       </template>
     </ToolFilter>
 
-    <div class="list-main-section">
-      <Transition name="fade">
-        <div v-if="pending" class="loading-overlay">
-          <n-spin size="large" />
-        </div>
-      </Transition>
-
-      <ClientOnly>
-        <div class="grid-content-box">
-          <n-grid
-            v-if="displayList && displayList.length > 0"
-            :x-gap="16"
-            :y-gap="16"
-            :cols="5"
-          >
-            <n-gi v-for="item in displayList" :key="item.id">
-              <ToolCard
-                :item="item"
-                :selectable="selectMode"
-                :selected="selectedIds.has(item.id)"
-                @click="handleOpenTool(item)"
-                @favorite="handleDoCollect"
-                @select="toggleSelect"
-              />
-            </n-gi>
-          </n-grid>
-
-          <div v-else-if="!pending" class="empty-placeholder">
-            <n-empty :description="queryParams.isFollowing ? '暂无收藏的工具' : '暂无工具数据'" />
+    <div class="tool-content-layout">
+      <div class="list-main-section">
+        <Transition name="fade">
+          <div v-if="pending" class="loading-overlay">
+            <n-spin size="large" />
           </div>
-        </div>
-      </ClientOnly>
+        </Transition>
 
-      <div class="pagination-footer">
-        <n-pagination
-          v-model:page="queryParams.pageNum"
-          :item-count="totalCount"
-          :page-size="queryParams.pageSize"
-          @update:page="handleRefresh"
-        />
+        <ClientOnly>
+          <div class="tool-list-box">
+            <div v-if="displayList && displayList.length > 0" class="tool-row-list">
+              <div
+                v-for="item in displayList"
+                :key="item.id"
+                class="tool-item-row-card"
+                :class="{ 'is-active': item.isExpanded, selected: selectedIds.has(item.id) }"
+              >
+                <div class="one-line-content">
+                  <button class="collapser-wrapper" type="button" @click.stop="toggleExpand(item)">
+                    <span class="expand-arrow" :class="{ rotated: item.isExpanded }">›</span>
+                  </button>
+
+                  <label v-if="selectMode" class="select-check" @click.stop>
+                    <input
+                      type="checkbox"
+                      :checked="selectedIds.has(item.id)"
+                      @change="toggleSelect(item.id)"
+                    >
+                  </label>
+
+                  <div class="title-section" @click="toggleExpand(item)">
+                    <span class="tag">【{{ formatResourceType(item.resourceType) }}】</span>
+                    <span class="main-title">{{ item.toolName }}</span>
+                    <span v-if="item.description" class="description-text">{{ item.description }}</span>
+                  </div>
+
+                  <div class="meta-group">
+                    <span class="meta-item">{{ formatAccessType(item.accessType) }}</span>
+                    <span v-if="isPaidResourceType(item.resourceType)" class="meta-item package-price">
+                      {{ formatMinSortPackagePrice(item) }}
+                    </span>
+                    <span
+                      v-if="isPaidResourceType(item.resourceType)"
+                      class="meta-item quota"
+                      :class="{ active: Number(item.remainingCount || 0) > 0 }"
+                    >
+                      剩余 {{ item.remainingCount || 0 }} 次
+                    </span>
+                    <span class="meta-item">{{ item.totalUsage || 0 }} 次使用</span>
+                    <span class="meta-item">{{ item.collectionCount || 0 }} 收藏</span>
+                  </div>
+
+                  <div class="action-group">
+                    <button
+                      v-if="canVoteGood"
+                      class="row-action-btn vote good"
+                      :class="{ active: Number(item.voteType || 0) === 1 }"
+                      type="button"
+                      @click.stop="handleToolVote(item, 1)"
+                    >
+                      👍 {{ item.goodCount || 0 }}
+                    </button>
+                    <button
+                      v-if="canVoteBad"
+                      class="row-action-btn vote bad"
+                      :class="{ active: Number(item.voteType || 0) === 3 }"
+                      type="button"
+                      @click.stop="handleToolVote(item, 3)"
+                    >
+                      👎 {{ item.badCount || 0 }}
+                    </button>
+                    <button
+                      v-if="canCollect"
+                      class="row-action-btn favorite"
+                      :class="{ active: item.isFavorite }"
+                      type="button"
+                      @click.stop="handleDoCollect(item.id)"
+                    >
+                      {{ item.isFavorite ? '已收藏' : '+收藏' }}
+                    </button>
+                    <button
+                      class="row-action-btn open"
+                      type="button"
+                      @click.stop="handleOpenTool(item)"
+                    >
+                      购买工具使用次数
+                    </button>
+                    <button
+                      v-if="canUpdate"
+                      class="row-action-btn edit"
+                      type="button"
+                      @click.stop="handleEditTool(item)"
+                    >
+                      修改
+                    </button>
+                  </div>
+                </div>
+
+                <transition name="expand">
+                  <div v-if="item.isExpanded" class="tool-embed-area">
+                    <iframe
+                      v-if="isIframeTool(item) && getEmbedUrl(item)"
+                      class="tool-embed-frame"
+                      :src="getEmbedUrl(item)"
+                      :title="item.toolName"
+                    />
+                    <component
+                      :is="getRuntimeComponent(item)"
+                      v-else-if="getRuntimeComponent(item)"
+                      @used="handleToolUsed(item)"
+                    />
+                    <div v-else class="tool-empty-url">
+                      该工具暂未配置可加载的工具文件
+                    </div>
+                  </div>
+                </transition>
+              </div>
+            </div>
+
+            <div v-else-if="!pending" class="empty-placeholder">
+              <n-empty :description="queryParams.isFollowing ? '暂无收藏的工具' : '暂无工具数据'" />
+            </div>
+          </div>
+        </ClientOnly>
+
+        <div class="pagination-footer">
+          <n-pagination
+            v-model:page="queryParams.pageNum"
+            :item-count="totalCount"
+            :page-size="queryParams.pageSize"
+            @update:page="handleRefresh"
+          />
+        </div>
       </div>
+
+      <aside class="recommend-panel">
+        <div class="recommend-tabs">
+          <button
+            v-for="tab in recommendTabs"
+            :key="tab.value"
+            class="recommend-tab"
+            :class="{ active: recommendType === tab.value }"
+            :disabled="recommendLoading"
+            type="button"
+            @click="handleRecommendTypeChange(tab.value)"
+          >
+            <span class="recommend-tab-icon">{{ tab.icon }}</span>
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <div class="recommend-list-wrap">
+          <n-spin :show="recommendLoading" size="small">
+            <div v-if="currentRecommendRows.length > 0" class="recommend-list">
+              <button
+                v-for="item in currentRecommendRows"
+                :key="item.id"
+                class="recommend-item"
+                type="button"
+                @click="handleRecommendToolClick(item)"
+              >
+                <span class="recommend-title">{{ item.toolName }}</span>
+                <span v-if="item.description" class="recommend-desc">{{ item.description }}</span>
+                <span class="recommend-meta">
+                  <span>{{ formatResourceType(item.resourceType) }}</span>
+                  <span v-if="isPaidResourceType(item.resourceType)">{{ formatMinSortPackagePrice(item) }}</span>
+                </span>
+                <span class="recommend-stats">
+                  <span v-if="recommendType === 'LATEST'">{{ formatRecommendTime(item) }}</span>
+                  <span v-else>{{ item.collectionCount || 0 }} 收藏 · {{ item.totalUsage || 0 }} 次使用</span>
+                </span>
+              </button>
+            </div>
+            <n-empty v-else description="暂无推荐工具" />
+          </n-spin>
+        </div>
+
+      </aside>
     </div>
 
-    <ToolEditModal v-model:show="showCreateModal" :tag-options="tagOptions" @success="handleCreateSuccess" />
+    <ToolEditModal
+      v-model:show="showEditModal"
+      :tag-options="tagOptions"
+      :edit-data="editingTool"
+      @success="handleCreateSuccess"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
-import { createDiscreteApi, NGrid, NGi, NPagination, NSpin, NEmpty } from 'naive-ui';
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { createDiscreteApi, NPagination, NSpin, NEmpty } from 'naive-ui';
 import ToolFilter from '~/components/Tool/ToolFilter.vue';
-import ToolCard from '~/components/Tool/ToolCard.vue';
 import ToolEditModal from '~/components/Tool/ToolEditModal.vue';
 import {
   apiCollectTool,
+  apiConsumeToolUsage,
   apiDeleteTool,
   apiRemoveCollectTool,
+  apiToolRecommend,
   apiToolTags,
+  apiVoteBadTool,
+  apiVoteGoodTool,
   useToolSearchApi,
 } from '~/composables/Api/Tool/tool';
+import ToolRuntimeTestTest from '~/components/Tool/runtime/test/test.vue';
 
 const route = useRoute();
 const { permissionList } = usePermission();
 
 const canCreate = computed(() => permissionList.value.includes('tool:create'));
+const canUpdate = computed(() => permissionList.value.includes('tool:update'));
 const canDelete = computed(() => permissionList.value.includes('tool:delete'));
+const canAddCollection = computed(() => permissionList.value.includes('tool:collection:add'));
+const canRemoveCollection = computed(() => permissionList.value.includes('tool:collection:remove'));
+const canCollect = computed(() => canAddCollection.value || canRemoveCollection.value);
+const canVoteGood = computed(() => permissionList.value.includes('tool:vote:good'));
+const canVoteBad = computed(() => permissionList.value.includes('tool:vote:bad'));
 
 const queryParams = reactive({
   keyword: '',
+  toolId: null,
   tags: [],
   pageNum: Number(route.params.page || 1),
   pageSize: 10,
@@ -110,7 +263,24 @@ const toolList = ref([]);
 const tagOptions = ref([]);
 const selectMode = ref(false);
 const selectedIds = ref(new Set());
-const showCreateModal = ref(false);
+const showEditModal = ref(false);
+const editingTool = ref(null);
+const consumingToolIds = ref(new Set());
+const recommendType = ref('HOT');
+const recommendLoading = ref(false);
+const recommendPageSize = 5;
+const recommendData = reactive({
+  HOT: { rows: [] },
+  LATEST: { rows: [] },
+});
+const recommendTabs = [
+  { label: '最近火热', value: 'HOT', icon: '⚡' },
+  { label: '最新发布', value: 'LATEST', icon: '☆' },
+];
+
+const runtimeToolMap = {
+  '/test/test': ToolRuntimeTestTest,
+};
 
 const syncToolList = (payload) => {
   if (!payload) {
@@ -129,13 +299,45 @@ const syncToolList = (payload) => {
       collectionFlag: isFavorite ? 1 : 0,
       favoriteCount: prev != null ? prev.favoriteCount : (item.collectionCount || 0),
       collectionCount: prev != null ? prev.favoriteCount : (item.collectionCount || 0),
+      voteType: item.voteType || item.vote_type || 0,
+      goodCount: item.goodCount || item.good_count || 0,
+      badCount: item.badCount || item.bad_count || 0,
+      isExpanded: prev != null ? !!prev.isExpanded : false,
     };
   });
+};
+
+const expandOnlyTool = (toolId) => {
+  toolList.value = toolList.value.map((item) => ({
+    ...item,
+    isExpanded: item.id === toolId,
+  }));
 };
 
 const loadTools = async () => {
   await refresh();
   syncToolList(resData.value);
+};
+
+const loadRecommendTools = async (type = recommendType.value) => {
+  if (recommendLoading.value) {
+    return;
+  }
+  recommendLoading.value = true;
+  try {
+    const res = await apiToolRecommend({
+      type,
+      pageNum: 1,
+      pageSize: recommendPageSize,
+    });
+    const payload = res?.data?.rows ? res.data : res;
+    recommendData[type].rows = payload?.rows || [];
+  } catch (e) {
+    console.error('加载推荐工具失败', e);
+    recommendData[type].rows = [];
+  } finally {
+    recommendLoading.value = false;
+  }
 };
 
 const loadTags = async () => {
@@ -154,6 +356,16 @@ const loadTags = async () => {
 onMounted(() => {
   loadTags();
   loadTools();
+  loadRecommendTools();
+  if (process.client) {
+    window.addEventListener('message', handleIframeToolMessage);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (process.client) {
+    window.removeEventListener('message', handleIframeToolMessage);
+  }
 });
 
 const totalCount = computed(() => {
@@ -169,19 +381,32 @@ const displayList = computed(() => {
   return toolList.value.filter((item) => item.collectionFlag === 1 || item.isFavorite);
 });
 
+const currentRecommendRows = computed(() => recommendData[recommendType.value].rows);
+
+const currentExpandedTool = computed(() => {
+  return toolList.value.find((item) => item.isExpanded) || null;
+});
+
 function toggleSelectMode() {
   selectMode.value = !selectMode.value;
   if (!selectMode.value) selectedIds.value.clear();
 }
 
 function handleCreateTool() {
-  showCreateModal.value = true;
+  editingTool.value = null;
+  showEditModal.value = true;
+}
+
+function handleEditTool(item) {
+  editingTool.value = { ...item };
+  showEditModal.value = true;
 }
 
 async function handleCreateSuccess() {
   queryParams.pageNum = 1;
   await loadTags();
   await loadTools();
+  await loadRecommendTools(recommendType.value);
 }
 
 function toggleSelect(id) {
@@ -219,6 +444,7 @@ async function handleBatchDelete() {
 }
 
 const handleSearch = () => {
+  queryParams.toolId = null;
   queryParams.pageNum = 1;
   loadTools();
 };
@@ -229,8 +455,178 @@ const handleRefresh = (page) => {
   loadTools();
 };
 
+const handleRecommendTypeChange = (type) => {
+  if (recommendLoading.value) {
+    return;
+  }
+  recommendType.value = type;
+  loadRecommendTools(type);
+};
+
+const handleRecommendToolClick = async (item) => {
+  if (!item?.id || pending.value) {
+    return;
+  }
+  queryParams.toolId = item.id;
+  queryParams.keyword = '';
+  queryParams.tags = [];
+  queryParams.resourceType = null;
+  queryParams.isFollowing = false;
+  queryParams.collectionFlag = null;
+  queryParams.pageNum = 1;
+  await loadTools();
+  expandOnlyTool(item.id);
+};
+
 const handleOpenTool = (item) => {
   navigateTo(`/tool/detail/${item.id}`);
+};
+
+const toggleExpand = (item) => {
+  const nextExpanded = !item.isExpanded;
+  toolList.value = toolList.value.map((tool) => ({
+    ...tool,
+    isExpanded: tool.id === item.id ? nextExpanded : false,
+  }));
+};
+
+const getFieldValue = (item, camelKey, snakeKey) => item?.[camelKey] || item?.[snakeKey] || '';
+
+const getEmbedUrl = (item) => {
+  const accessType = Number(getFieldValue(item, 'accessType', 'access_type'));
+  return accessType === 2
+    ? getFieldValue(item, 'iframeUrl', 'iframe_url')
+    : getFieldValue(item, 'routePath', 'route_path');
+};
+
+const isIframeTool = (item) => Number(getFieldValue(item, 'accessType', 'access_type')) === 2;
+
+const getUrlOrigin = (url) => {
+  if (!url || !process.client) {
+    return '';
+  }
+  try {
+    return new URL(url, window.location.origin).origin;
+  } catch (e) {
+    return '';
+  }
+};
+
+const getRuntimeComponent = (item) => {
+  const routePath = getFieldValue(item, 'routePath', 'route_path');
+  return runtimeToolMap[routePath] || null;
+};
+
+const formatAccessType = (accessType) => Number(accessType) === 2 ? '外部页面' : '站内页面';
+
+const formatResourceType = (resourceType) => {
+  const typeMap = {
+    FREE: '免费',
+    CASH_ONLY: '付费',
+    CASH_POINT: '现金+积分',
+    VIP: 'VIP',
+    SMALL_CLASS: '小班',
+    INTERNAL: '内部',
+  };
+  return typeMap[resourceType] || resourceType || '工具';
+};
+
+const isPaidResourceType = (resourceType) => ['CASH_ONLY', 'CASH_POINT'].includes(resourceType);
+
+const buildUsageKey = (toolId) => `${toolId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const setConsuming = (toolId, value) => {
+  const next = new Set(consumingToolIds.value);
+  if (value) next.add(toolId);
+  else next.delete(toolId);
+  consumingToolIds.value = next;
+};
+
+const parseIframeMessageData = (data) => {
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      return null;
+    }
+  }
+  return data && typeof data === 'object' ? data : null;
+};
+
+const handleIframeToolMessage = (event) => {
+  const item = currentExpandedTool.value;
+  if (!item || !isIframeTool(item)) {
+    return;
+  }
+
+  const iframeOrigin = getUrlOrigin(getEmbedUrl(item));
+  if (!iframeOrigin || event.origin !== iframeOrigin) {
+    return;
+  }
+
+  const data = parseIframeMessageData(event.data);
+  if (!data || data.type !== 'OSH_TOOL_USED') {
+    return;
+  }
+  if (data.status && data.status !== 'SUCCESS') {
+    return;
+  }
+  if (Number(data.toolId) !== Number(item.id)) {
+    return;
+  }
+
+  handleToolUsed(item, data.usageKey);
+};
+
+const handleToolUsed = async (item, usageKey) => {
+  if (!item || !isPaidResourceType(item.resourceType)) {
+    return;
+  }
+  const { message } = createDiscreteApi(['message']);
+  if (consumingToolIds.value.has(item.id)) {
+    return;
+  }
+  if (Number(item.remainingCount || 0) <= 0) {
+    message.warning('工具使用次数不足，请先购买套餐');
+    return;
+  }
+  setConsuming(item.id, true);
+  try {
+    const res = await apiConsumeToolUsage({
+      toolId: item.id,
+      usageKey: usageKey || buildUsageKey(item.id),
+    });
+    if (res?.code === 200) {
+      item.remainingCount = Number(res.data ?? Math.max(0, Number(item.remainingCount || 0) - 1));
+      item.purchasedFlag = item.remainingCount > 0 ? 1 : 0;
+      item.totalUsage = Number(item.totalUsage || 0) + 1;
+      message.success('已扣减 1 次工具使用次数');
+    } else {
+      message.error(res?.msg || '扣减工具使用次数失败');
+    }
+  } catch (e) {
+    message.error(e?.data?.msg || e?.message || '扣减工具使用次数失败');
+  } finally {
+    setConsuming(item.id, false);
+  }
+};
+
+const getMinSortPackage = (item) => {
+  const packages = Array.isArray(item?.packages) ? item.packages : [];
+  if (!packages.length) return null;
+  return [...packages]
+    .filter((pkg) => Number(pkg.status ?? 1) === 1)
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))[0] || null;
+};
+
+const formatMinSortPackagePrice = (item) => {
+  const pkg = getMinSortPackage(item);
+  if (!pkg) return '暂无套餐';
+  return `¥${pkg.price || 0} / ${pkg.useCount || 0}次`;
+};
+
+const formatRecommendTime = (item) => {
+  return item?.createTime || item?.create_time || '最近发布';
 };
 
 const handleDoCollect = async (toolId) => {
@@ -239,6 +635,14 @@ const handleDoCollect = async (toolId) => {
   if (!tool) return;
 
   const wasCollected = tool.isFavorite;
+  if (!wasCollected && !canAddCollection.value) {
+    message.warning('暂无收藏工具权限');
+    return;
+  }
+  if (wasCollected && !canRemoveCollection.value) {
+    message.warning('暂无取消收藏权限');
+    return;
+  }
   const previousCount = tool.favoriteCount || tool.collectionCount || 0;
   tool.isFavorite = !wasCollected;
   tool.collectionFlag = wasCollected ? 0 : 1;
@@ -254,6 +658,9 @@ const handleDoCollect = async (toolId) => {
 
     if (res?.code === 200) {
       message.success(wasCollected ? '已取消收藏' : '收藏成功');
+      if (recommendType.value === 'HOT') {
+        loadRecommendTools('HOT');
+      }
     } else {
       rollbackFavorite(tool, wasCollected, previousCount);
       message.error(res?.msg || '操作失败');
@@ -261,6 +668,67 @@ const handleDoCollect = async (toolId) => {
   } catch {
     rollbackFavorite(tool, wasCollected, previousCount);
     message.error('请求失败');
+  }
+};
+
+const handleToolVote = async (item, type) => {
+  const { message } = createDiscreteApi(['message']);
+  if (!item?.id) return;
+  if (type === 1 && !canVoteGood.value) {
+    message.warning('暂无点赞工具权限');
+    return;
+  }
+  if (type === 3 && !canVoteBad.value) {
+    message.warning('暂无差评工具权限');
+    return;
+  }
+
+  const oldVoteType = Number(item.voteType || 0);
+  const oldGoodCount = Number(item.goodCount || 0);
+  const oldBadCount = Number(item.badCount || 0);
+
+  applyToolVoteLocal(item, oldVoteType, type);
+
+  try {
+    const res = type === 1
+      ? await apiVoteGoodTool(item.id)
+      : await apiVoteBadTool(item.id);
+    if (res?.code === 200) {
+      item.voteType = Number(res.data || 0);
+      message.success(item.voteType === 0 ? '已取消评价' : '评价成功');
+      return;
+    }
+    item.voteType = oldVoteType;
+    item.goodCount = oldGoodCount;
+    item.badCount = oldBadCount;
+    message.error(res?.msg || '评价失败');
+  } catch (e) {
+    item.voteType = oldVoteType;
+    item.goodCount = oldGoodCount;
+    item.badCount = oldBadCount;
+    message.error(e?.data?.msg || e?.message || '评价失败');
+  }
+};
+
+const applyToolVoteLocal = (item, oldVoteType, type) => {
+  if (oldVoteType === type) {
+    updateToolVoteCount(item, type, -1);
+    item.voteType = 0;
+    return;
+  }
+  if (oldVoteType !== 0) {
+    updateToolVoteCount(item, oldVoteType, -1);
+  }
+  updateToolVoteCount(item, type, 1);
+  item.voteType = type;
+};
+
+const updateToolVoteCount = (item, type, delta) => {
+  if (type === 1) {
+    item.goodCount = Math.max(0, Number(item.goodCount || 0) + delta);
+  }
+  if (type === 3) {
+    item.badCount = Math.max(0, Number(item.badCount || 0) + delta);
   }
 };
 
@@ -274,7 +742,7 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
 
 <style scoped>
 .tool-container {
-  max-width: 1200px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -309,14 +777,201 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
   background: #fff; color: #18a058; border: 1px solid #18a058;
 }
 .btn-create-tool:hover { background: #18a058; color: #fff; }
+.tool-content-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  align-items: start;
+}
 .list-main-section {
   position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
-.grid-content-box {
+.tool-list-box {
   min-height: 200px;
   margin-bottom: 12px;
+}
+.tool-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tool-item-row-card {
+  background: #fff;
+  border: 1px solid #efeff5;
+  border-radius: 6px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+.tool-item-row-card:hover {
+  border-color: #26a67a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.tool-item-row-card.is-active {
+  border-color: #26a67a;
+  box-shadow: 0 4px 12px rgba(38, 166, 122, 0.08);
+}
+.tool-item-row-card.selected {
+  border-color: #d03050;
+}
+.one-line-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 14px;
+}
+.collapser-wrapper {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+}
+.expand-arrow {
+  font-size: 24px;
+  line-height: 1;
+  transition: transform 0.25s ease;
+}
+.expand-arrow.rotated {
+  color: #26a67a;
+  transform: rotate(90deg);
+}
+.select-check {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.title-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.tag {
+  color: #165d69;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.main-title {
+  color: #333;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.description-text {
+  color: #666;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta-group {
+  display: flex;
+  gap: 12px;
+  color: #888;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.meta-item {
+  white-space: nowrap;
+}
+.meta-item.package-price {
+  color: #d03050;
+  font-weight: 800;
+}
+.meta-item.quota {
+  color: #d03050;
+  font-weight: 700;
+}
+.meta-item.quota.active {
+  color: #18a058;
+}
+.action-group {
+  border-left: 1px solid #eee;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-left: 12px;
+}
+.row-action-btn {
+  border: 1px solid #d9d9d9;
+  border-radius: 5px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  height: 26px;
+  padding: 0 9px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.row-action-btn:hover {
+  border-color: #26a67a;
+  color: #26a67a;
+}
+.row-action-btn.favorite.active {
+  background: #18a058;
+  border-color: #18a058;
+  color: #fff;
+}
+.row-action-btn.vote.good {
+  background: #26a67a;
+  border-color: #26a67a;
+  color: #fff;
+}
+.row-action-btn.vote.bad {
+  background: #e53e3e;
+  border-color: #e53e3e;
+  color: #fff;
+}
+.row-action-btn.vote.active {
+  background: #18a058;
+  border-color: #18a058;
+  color: #fff;
+}
+.row-action-btn.edit:hover {
+  border-color: #4f46e5;
+  color: #4f46e5;
+}
+.tool-embed-area {
+  background: #fafafa;
+  border-top: 1px dashed #efeff5;
+  padding: 12px 16px 16px 46px;
+}
+.tool-embed-frame {
+  width: 100%;
+  min-height: 560px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+}
+.tool-empty-url {
+  color: #999;
+  font-size: 13px;
+  line-height: 44px;
+}
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.2s ease;
+}
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 .pagination-footer {
   display: flex;
@@ -342,5 +997,135 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+.recommend-panel {
+  position: sticky;
+  top: 12px;
+  align-self: start;
+  background: #fff;
+  border: 1px solid #efeff5;
+  border-radius: 6px;
+  padding: 12px;
+}
+.recommend-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.recommend-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 32px;
+  border: 1px solid #d9d9d9;
+  border-radius: 5px;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+.recommend-tab.active,
+.recommend-tab:hover {
+  border-color: #18a058;
+  background: #f0faf5;
+  color: #18a058;
+}
+.recommend-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.recommend-tab-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.recommend-list-wrap {
+  min-height: 286px;
+}
+.recommend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recommend-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.recommend-item:hover {
+  border-color: #26a67a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.recommend-title {
+  color: #222;
+  font-size: 14px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recommend-desc {
+  color: #666;
+  font-size: 12px;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recommend-meta,
+.recommend-stats {
+  display: flex;
+  gap: 8px;
+  color: #888;
+  font-size: 12px;
+  line-height: 18px;
+}
+.recommend-meta span:first-child {
+  color: #165d69;
+  font-weight: 700;
+}
+.recommend-meta span:last-child:not(:first-child) {
+  color: #d03050;
+  font-weight: 800;
+}
+@media (max-width: 1100px) {
+  .tool-content-layout {
+    grid-template-columns: 1fr;
+  }
+  .recommend-panel {
+    position: static;
+  }
+}
+@media (max-width: 900px) {
+  .one-line-content {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .title-section {
+    flex-basis: calc(100% - 36px);
+  }
+  .meta-group,
+  .action-group {
+    margin-left: 36px;
+  }
+  .action-group {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .tool-embed-area {
+    padding-left: 16px;
+  }
 }
 </style>

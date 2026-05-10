@@ -2,7 +2,7 @@
   <n-modal
     :show="show"
     preset="card"
-    title="新增工具"
+    :title="modalTitle"
     style="width: 920px"
     size="huge"
     :segmented="{ content: 'soft', footer: 'soft' }"
@@ -22,20 +22,6 @@
           />
         </n-form-item>
       </div>
-
-      <n-form-item label="工具封面">
-        <div class="cover-upload">
-          <div v-if="formValue.logoUrl" class="cover-preview" @click="triggerCover">
-            <img :src="formValue.logoPreview || formValue.logoUrl" class="cover-img" />
-            <div class="cover-mask">点击更换</div>
-          </div>
-          <div v-else class="cover-placeholder" :class="{ loading: coverUploading }" @click="triggerCover">
-            {{ coverUploading ? '上传中...' : '+ 点击上传封面' }}
-          </div>
-          <input ref="coverInputRef" type="file" accept="image/*" style="display:none" @change="handleCoverChange" />
-          <span class="upload-tip">建议 16:9，JPG/PNG，≤5MB</span>
-        </div>
-      </n-form-item>
 
       <n-form-item label="工具描述">
         <n-input
@@ -80,20 +66,6 @@
       </div>
 
       <div class="form-grid">
-        <n-form-item label="当前价格">
-          <n-input-number v-model:value="formValue.price" :min="0" style="width: 100%">
-            <template #prefix>￥</template>
-          </n-input-number>
-        </n-form-item>
-
-        <n-form-item label="原价">
-          <n-input-number v-model:value="formValue.originalPrice" :min="0" style="width: 100%">
-            <template #prefix>￥</template>
-          </n-input-number>
-        </n-form-item>
-      </div>
-
-      <div class="form-grid">
         <n-form-item label="积分消耗">
           <n-input-number v-model:value="formValue.pointCost" :min="0" style="width: 100%" />
         </n-form-item>
@@ -104,8 +76,10 @@
             multiple
             filterable
             tag
+            :max-tag-count="3"
             placeholder="选择已有标签或输入新标签后回车"
             :options="tagOptions"
+            @update:value="handleTagsChange"
           />
         </n-form-item>
       </div>
@@ -113,55 +87,78 @@
       <n-form-item label="备注">
         <n-input v-model:value="formValue.remark" placeholder="可选，后台备注" />
       </n-form-item>
+
+      <n-form-item v-if="showPackageEditor" label="售卖套餐">
+        <div class="package-editor">
+          <div
+            v-for="(item, index) in formValue.packages"
+            :key="item.localKey"
+            class="package-row"
+          >
+            <n-input-number v-model:value="item.useCount" :min="1" placeholder="次数" />
+            <n-input-number v-model:value="item.price" :min="0" placeholder="现金">
+              <template #prefix>￥</template>
+            </n-input-number>
+            <div class="point-preview">
+              {{ calcPointCost(item.price) }} 积分
+            </div>
+            <n-input-number v-model:value="item.sortOrder" placeholder="排序" />
+            <n-button tertiary type="error" @click="removePackage(index)">删除</n-button>
+          </div>
+          <n-button secondary type="primary" @click="addPackage">+ 添加套餐</n-button>
+        </div>
+      </n-form-item>
     </n-form>
 
     <template #footer>
       <n-space>
-        <n-button type="primary" :loading="loading" :disabled="loading" @click="handleSubmit">保存并发布</n-button>
+        <n-button type="primary" :loading="loading" :disabled="loading" @click="handleSubmit">{{ submitText }}</n-button>
         <n-button @click="$emit('update:show', false)">取消</n-button>
       </n-space>
     </template>
   </n-modal>
+
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { createDiscreteApi } from 'naive-ui';
 import {
   NModal, NForm, NFormItem, NInput, NSelect, NSpace,
   NInputNumber, NButton,
 } from 'naive-ui';
-import { apiSaveTool, apiUploadToolCover } from '~/composables/Api/Tool/tool';
+import { apiSaveTool, apiUpdateTool } from '~/composables/Api/Tool/tool';
 
 const props = defineProps({
   show: Boolean,
   tagOptions: { type: Array, default: () => [] },
+  editData: { type: Object, default: null },
 });
 const emit = defineEmits(['update:show', 'success']);
 
 const { message } = createDiscreteApi(['message']);
 const loading = ref(false);
-const coverUploading = ref(false);
-const coverInputRef = ref(null);
 
 const formValue = reactive({
+  id: null,
   toolName: '',
   description: '',
-  logoUrl: '',
-  logoPreview: '',
   accessType: 1,
   routePath: '',
   iframeUrl: '',
   githubUrl: '',
-  price: 0,
-  originalPrice: 0,
   pointCost: 0,
   status: 1,
   remark: '',
   resourceType: 'FREE',
   level: 1,
   tags: [],
+  packages: [],
 });
+
+const isEdit = computed(() => !!props.editData?.id);
+const modalTitle = computed(() => isEdit.value ? '修改工具' : '新增工具');
+const submitText = computed(() => isEdit.value ? '保存修改' : '保存并发布');
 
 const accessTypeOptions = [
   { label: '站内工具', value: 1 },
@@ -177,65 +174,87 @@ const resourceTypeOptions = [
   { label: '内部免费', value: 'INTERNAL' },
 ];
 
+const MAX_TAG_COUNT = 3;
+const paidResourceTypes = ['CASH_ONLY', 'CASH_POINT'];
+const showPackageEditor = computed(() => paidResourceTypes.includes(formValue.resourceType));
+
 watch(() => props.show, (value) => {
   if (value) resetForm();
 });
 
+watch(() => props.editData, () => {
+  if (props.show) resetForm();
+});
+
 function resetForm() {
-  formValue.toolName = '';
-  formValue.description = '';
-  formValue.logoUrl = '';
-  formValue.logoPreview = '';
-  formValue.accessType = 1;
-  formValue.routePath = '';
-  formValue.iframeUrl = '';
-  formValue.githubUrl = '';
-  formValue.price = 0;
-  formValue.originalPrice = 0;
-  formValue.pointCost = 0;
-  formValue.status = 1;
-  formValue.remark = '';
-  formValue.resourceType = 'FREE';
-  formValue.level = 1;
-  formValue.tags = [];
+  const source = props.editData || {};
+  formValue.id = source.id || null;
+  formValue.toolName = source.toolName || '';
+  formValue.description = source.description || '';
+  formValue.accessType = Number(source.accessType || source.access_type || 1);
+  formValue.routePath = source.routePath || source.route_path || '';
+  formValue.iframeUrl = source.iframeUrl || source.iframe_url || '';
+  formValue.githubUrl = source.githubUrl || source.github_url || '';
+  formValue.pointCost = Number(source.pointCost || source.point_cost || 0);
+  formValue.status = source.status ?? 1;
+  formValue.remark = source.remark || '';
+  formValue.resourceType = source.resourceType || source.resource_type || 'FREE';
+  formValue.level = Number(source.level || 1);
+  formValue.tags = Array.isArray(source.tags) ? [...source.tags] : [];
+  formValue.packages = normalizePackages(source.packages);
 }
 
-const triggerCover = () => coverInputRef.value?.click();
+function createEmptyPackage() {
+  return {
+    localKey: `${Date.now()}-${Math.random()}`,
+    id: null,
+    useCount: 10,
+    price: 0,
+    pointCost: 0,
+    payType: 1,
+    status: 1,
+    sortOrder: 0,
+  };
+}
 
-async function handleCoverChange(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) {
-    message.warning('封面不能超过 5MB');
-    e.target.value = '';
-    return;
+function normalizePackages(packages) {
+  if (!Array.isArray(packages)) {
+    return [];
   }
-  coverUploading.value = true;
-  try {
-    const res = await apiUploadToolCover(file);
-    if (res?.code === 200) {
-      formValue.logoPreview = res.data?.url || '';
-      formValue.logoUrl = res.data?.relativePath || '';
-      message.success('封面上传成功');
-    } else {
-      message.error(res?.msg || '上传失败');
-    }
-  } catch (err) {
-    console.error('工具封面上传失败:', err);
-    message.error('上传失败');
-  } finally {
-    coverUploading.value = false;
-    e.target.value = '';
+  return packages.map((item) => ({
+    localKey: `${item.id || 'new'}-${Date.now()}-${Math.random()}`,
+    id: item.id || null,
+    useCount: Number(item.useCount || item.use_count || 1),
+    price: Number(item.price || 0),
+    pointCost: Number(item.pointCost || item.point_cost || 0),
+    payType: Number(item.payType || item.pay_type || 1),
+    status: item.status ?? 1,
+    sortOrder: Number(item.sortOrder || item.sort_order || 0),
+  }));
+}
+
+function addPackage() {
+  formValue.packages.push(createEmptyPackage());
+}
+
+function removePackage(index) {
+  formValue.packages.splice(index, 1);
+}
+
+function calcPointCost(price) {
+  return Math.round(Number(price || 0) * 10);
+}
+
+function handleTagsChange(value) {
+  if (Array.isArray(value) && value.length > MAX_TAG_COUNT) {
+    formValue.tags = value.slice(0, MAX_TAG_COUNT);
+    message.warning(`工具标签最多添加 ${MAX_TAG_COUNT} 个`);
   }
 }
 
 async function handleSubmit() {
   if (!formValue.toolName?.trim()) {
     message.error('请输入工具名称');
-    return;
-  }
-  if (!formValue.logoUrl) {
-    message.error('请上传工具封面');
     return;
   }
   if (formValue.accessType === 1 && !formValue.routePath?.trim()) {
@@ -246,40 +265,66 @@ async function handleSubmit() {
     message.error('请输入第三方 iframe 地址');
     return;
   }
+  if (formValue.tags.length > MAX_TAG_COUNT) {
+    message.error(`工具标签最多添加 ${MAX_TAG_COUNT} 个`);
+    return;
+  }
+  const submitPackages = showPackageEditor.value ? formValue.packages : [];
+  for (const item of submitPackages) {
+    if (!item.useCount || item.useCount <= 0) {
+      message.error('套餐次数必须大于0');
+      return;
+    }
+    if (Number(item.price || 0) <= 0) {
+      message.error('套餐现金金额必须大于0');
+      return;
+    }
+  }
 
   loading.value = true;
   try {
     const body = {
+      id: formValue.id,
       toolName: formValue.toolName,
       description: formValue.description,
-      logoUrl: formValue.logoUrl,
+      logoUrl: null,
       accessType: formValue.accessType,
       routePath: formValue.accessType === 1 ? formValue.routePath : null,
       iframeUrl: formValue.accessType === 2 ? formValue.iframeUrl : null,
       githubUrl: formValue.githubUrl,
-      price: formValue.price,
-      originalPrice: formValue.originalPrice,
+      price: 0,
+      originalPrice: 0,
       pointCost: formValue.pointCost,
       status: formValue.status,
       remark: formValue.remark,
       resourceType: formValue.resourceType,
       level: formValue.level,
+      packages: submitPackages.map((item) => ({
+        id: item.id,
+        packageName: `${item.useCount}次使用套餐`,
+        useCount: item.useCount,
+        price: item.price || 0,
+        pointCost: calcPointCost(item.price),
+        payType: formValue.resourceType === 'CASH_POINT' ? 3 : 1,
+        status: item.status ?? 1,
+        sortOrder: item.sortOrder || 0,
+      })),
       tags: formValue.tags.map((tag) => {
         if (typeof tag === 'string' && isNaN(Number(tag))) return tag;
         const option = props.tagOptions.find((item) => item.value === tag || String(item.value) === String(tag));
         return option ? option.label : String(tag);
       }),
     };
-    const res = await apiSaveTool(body);
+    const res = isEdit.value ? await apiUpdateTool(body) : await apiSaveTool(body);
     if (res?.code === 200) {
-      message.success('工具创建成功');
+      message.success(isEdit.value ? '工具修改成功' : '工具创建成功');
       emit('success');
       emit('update:show', false);
     } else {
       message.error(res?.msg || '保存失败');
     }
   } catch (err) {
-    console.error('新增工具失败:', err);
+    console.error(isEdit.value ? '修改工具失败:' : '新增工具失败:', err);
     message.error('网络异常');
   } finally {
     loading.value = false;
@@ -293,67 +338,34 @@ async function handleSubmit() {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 18px;
 }
-.cover-upload {
+.package-editor {
+  width: 100%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
 }
-.cover-preview {
-  position: relative;
-  width: 176px;
-  height: 99px;
-  border-radius: 6px;
-  overflow: hidden;
-  cursor: pointer;
+.package-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(130px, 1fr) minmax(110px, 0.9fr) minmax(90px, 0.8fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.point-preview {
+  min-height: 34px;
   border: 1px solid #e5e7eb;
-  background: #f3f4f6;
-}
-.cover-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.cover-mask {
-  position: absolute;
-  inset: 0;
+  border-radius: 3px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 13px;
-  background: rgba(0, 0, 0, 0.42);
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.cover-preview:hover .cover-mask {
-  opacity: 1;
-}
-.cover-placeholder {
-  width: 176px;
-  height: 99px;
-  border: 2px dashed #d8dde6;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #8a94a6;
-  font-size: 13px;
-  cursor: pointer;
-  background: #fafbfc;
-  transition: all 0.2s;
-}
-.cover-placeholder:hover,
-.cover-placeholder.loading {
-  border-color: #18a058;
-  color: #18a058;
-  background: #f0fdf4;
-}
-.upload-tip {
-  color: #999;
-  font-size: 12px;
+  color: #7c3aed;
+  background: #fafafa;
+  font-weight: 700;
 }
 @media (max-width: 780px) {
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .package-row {
     grid-template-columns: 1fr;
   }
 }
