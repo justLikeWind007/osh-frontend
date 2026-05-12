@@ -16,7 +16,13 @@
           <template v-if="canDelete && selectedIds.size > 0">
             <span class="batch-tip">已选 {{ selectedIds.size }} 个工具</span>
             <button class="btn-batch-cancel" @click="selectedIds.clear(); selectMode = false">取消</button>
-            <button class="btn-batch-delete" @click="handleBatchDelete">🗑 删除选中</button>
+            <button
+              class="btn-batch-delete"
+              :disabled="deleteSubmitting"
+              @click="handleBatchDelete"
+            >
+              {{ deleteSubmitting ? '删除中...' : '🗑 删除选中' }}
+            </button>
           </template>
         </ClientOnly>
       </template>
@@ -39,42 +45,50 @@
                 class="tool-item-row-card"
                 :class="{ 'is-active': item.isExpanded, selected: selectedIds.has(item.id) }"
               >
-                <div class="one-line-content">
-                  <button class="collapser-wrapper" type="button" @click.stop="toggleExpand(item)">
-                    <span class="expand-arrow" :class="{ rotated: item.isExpanded }">›</span>
-                  </button>
+                <div class="tool-row-content">
+                  <div class="tool-row-main">
+                    <button class="collapser-wrapper" type="button" @click.stop="toggleExpand(item)">
+                      <span class="expand-arrow" :class="{ rotated: item.isExpanded }">›</span>
+                    </button>
 
-                  <label v-if="selectMode" class="select-check" @click.stop>
-                    <input
-                      type="checkbox"
-                      :checked="selectedIds.has(item.id)"
-                      @change="toggleSelect(item.id)"
-                    >
-                  </label>
+                    <label v-if="selectMode" class="select-check" @click.stop>
+                      <input
+                        type="checkbox"
+                        :checked="selectedIds.has(item.id)"
+                        @change="toggleSelect(item.id)"
+                      >
+                    </label>
 
-                  <div class="title-section" @click="toggleExpand(item)">
-                    <span class="tag">【{{ formatResourceType(item.resourceType) }}】</span>
-                    <span class="main-title">{{ item.toolName }}</span>
-                    <span v-if="item.description" class="description-text">{{ item.description }}</span>
+                    <div class="title-section" @click="toggleExpand(item)">
+                      <span class="tag">【{{ formatResourceType(item.resourceType) }}】</span>
+                      <span class="main-title">{{ item.toolName }}</span>
+                      <span v-if="item.description" class="description-text">{{ item.description }}</span>
+
+
+                    </div>
+
+<!--                    <span class="access-type">{{ formatAccessType(item.accessType) }}</span>-->
+                    <div class="meta-group">
+                      <span v-if="isPaidResourceType(item.resourceType)" class="meta-item package-price">
+                        {{ formatMinSortPackagePrice(item) }}
+                      </span>
+                      <span
+                          v-if="isPaidResourceType(item.resourceType)"
+                          class="meta-item quota"
+                          :class="{ active: Number(item.remainingCount || 0) > 0 }"
+                      >
+                        剩余 {{ item.remainingCount || 0 }} 次
+                      </span>
+                      <span class="meta-item">{{ item.viewCount || 0 }} 浏览</span>
+                      <span class="meta-item">{{ item.totalUsage || 0 }} 次使用</span>
+                      <span class="meta-item">{{ item.collectionCount || 0 }} 收藏</span>
+                    </div>
+
                   </div>
 
-                  <div class="meta-group">
-                    <span class="meta-item">{{ formatAccessType(item.accessType) }}</span>
-                    <span v-if="isPaidResourceType(item.resourceType)" class="meta-item package-price">
-                      {{ formatMinSortPackagePrice(item) }}
-                    </span>
-                    <span
-                      v-if="isPaidResourceType(item.resourceType)"
-                      class="meta-item quota"
-                      :class="{ active: Number(item.remainingCount || 0) > 0 }"
-                    >
-                      剩余 {{ item.remainingCount || 0 }} 次
-                    </span>
-                    <span class="meta-item">{{ item.totalUsage || 0 }} 次使用</span>
-                    <span class="meta-item">{{ item.collectionCount || 0 }} 收藏</span>
-                  </div>
+                  <div class="tool-row-sub">
 
-                  <div class="action-group">
+                    <div class="action-group">
                     <button
                       v-if="canVoteGood"
                       class="row-action-btn vote good"
@@ -92,6 +106,14 @@
                       @click.stop="handleToolVote(item, 3)"
                     >
                       👎 {{ item.badCount || 0 }}
+                    </button>
+                    <button
+                      v-if="canCreateQuestion"
+                      class="row-action-btn question"
+                      type="button"
+                      @click.stop="handleOpenQuestionModal(item)"
+                    >
+                      💬 提问
                     </button>
                     <button
                       v-if="canCollect"
@@ -117,6 +139,7 @@
                     >
                       修改
                     </button>
+                    </div>
                   </div>
                 </div>
 
@@ -208,6 +231,15 @@
       :edit-data="editingTool"
       @success="handleCreateSuccess"
     />
+
+    <QuestionAnswerCreateModal
+      v-model:show="showQuestionModal"
+      title="为当前工具提问"
+      preset-resource-type="tool"
+      :preset-resource-no="questionToolId"
+      :lock-resource="true"
+      @success="handleQuestionCreated"
+    />
   </div>
 </template>
 
@@ -216,11 +248,13 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { createDiscreteApi, NPagination, NSpin, NEmpty } from 'naive-ui';
 import ToolFilter from '~/components/Tool/ToolFilter.vue';
 import ToolEditModal from '~/components/Tool/ToolEditModal.vue';
+import QuestionAnswerCreateModal from '~/components/question_answer/CreateModal.vue';
 import {
   apiCollectTool,
   apiConsumeToolUsage,
   apiDeleteTool,
   apiRemoveCollectTool,
+  apiRecordToolView,
   apiToolRecommend,
   apiToolTags,
   apiVoteBadTool,
@@ -240,6 +274,7 @@ const canRemoveCollection = computed(() => permissionList.value.includes('tool:c
 const canCollect = computed(() => canAddCollection.value || canRemoveCollection.value);
 const canVoteGood = computed(() => permissionList.value.includes('tool:vote:good'));
 const canVoteBad = computed(() => permissionList.value.includes('tool:vote:bad'));
+const canCreateQuestion = computed(() => permissionList.value.includes('qna:question:create'));
 
 const queryParams = reactive({
   keyword: '',
@@ -265,7 +300,10 @@ const selectMode = ref(false);
 const selectedIds = ref(new Set());
 const showEditModal = ref(false);
 const editingTool = ref(null);
+const showQuestionModal = ref(false);
+const questionToolId = ref(null);
 const consumingToolIds = ref(new Set());
+const deleteSubmitting = ref(false);
 const recommendType = ref('HOT');
 const recommendLoading = ref(false);
 const recommendPageSize = 5;
@@ -302,6 +340,7 @@ const syncToolList = (payload) => {
       voteType: item.voteType || item.vote_type || 0,
       goodCount: item.goodCount || item.good_count || 0,
       badCount: item.badCount || item.bad_count || 0,
+      viewCount: item.viewCount || item.view_count || 0,
       isExpanded: prev != null ? !!prev.isExpanded : false,
     };
   });
@@ -312,6 +351,10 @@ const expandOnlyTool = (toolId) => {
     ...item,
     isExpanded: item.id === toolId,
   }));
+  const tool = toolList.value.find((item) => item.id === toolId);
+  if (tool) {
+    recordToolView(tool);
+  }
 };
 
 const loadTools = async () => {
@@ -402,6 +445,20 @@ function handleEditTool(item) {
   showEditModal.value = true;
 }
 
+function handleOpenQuestionModal(item) {
+  if (!canCreateQuestion.value) {
+    const { message } = createDiscreteApi(['message']);
+    message.warning('暂无工具提问权限');
+    return;
+  }
+  questionToolId.value = Number(item.id);
+  showQuestionModal.value = true;
+}
+
+function handleQuestionCreated() {
+  showQuestionModal.value = false;
+}
+
 async function handleCreateSuccess() {
   queryParams.pageNum = 1;
   await loadTags();
@@ -418,12 +475,19 @@ function toggleSelect(id) {
 
 async function handleBatchDelete() {
   const { message, dialog } = createDiscreteApi(['message', 'dialog']);
+  if (deleteSubmitting.value || selectedIds.value.size === 0) {
+    return;
+  }
   dialog.warning({
     title: '确认删除',
     content: `确定删除选中的 ${selectedIds.value.size} 个工具？`,
     positiveText: '确认删除',
     negativeText: '取消',
     onPositiveClick: async () => {
+      if (deleteSubmitting.value) {
+        return false;
+      }
+      deleteSubmitting.value = true;
       try {
         const ids = Array.from(selectedIds.value);
         const res = await apiDeleteTool(ids);
@@ -438,6 +502,8 @@ async function handleBatchDelete() {
         }
       } catch (e) {
         message.error('删除失败，请重试');
+      } finally {
+        deleteSubmitting.value = false;
       }
     },
   });
@@ -488,18 +554,29 @@ const toggleExpand = (item) => {
     ...tool,
     isExpanded: tool.id === item.id ? nextExpanded : false,
   }));
+  if (nextExpanded) {
+    const current = toolList.value.find((tool) => tool.id === item.id);
+    recordToolView(current);
+  }
+};
+
+const recordToolView = async (item) => {
+  if (!item?.id) {
+    return;
+  }
+  item.viewCount = Number(item.viewCount || 0) + 1;
+  try {
+    await apiRecordToolView(item.id);
+  } catch (e) {
+    console.error('记录工具浏览失败', e);
+  }
 };
 
 const getFieldValue = (item, camelKey, snakeKey) => item?.[camelKey] || item?.[snakeKey] || '';
 
-const getEmbedUrl = (item) => {
-  const accessType = Number(getFieldValue(item, 'accessType', 'access_type'));
-  return accessType === 2
-    ? getFieldValue(item, 'iframeUrl', 'iframe_url')
-    : getFieldValue(item, 'routePath', 'route_path');
-};
+const getEmbedUrl = (item) => getFieldValue(item, 'routePath', 'route_path');
 
-const isIframeTool = (item) => Number(getFieldValue(item, 'accessType', 'access_type')) === 2;
+const isIframeTool = () => false;
 
 const getUrlOrigin = (url) => {
   if (!url || !process.client) {
@@ -517,13 +594,13 @@ const getRuntimeComponent = (item) => {
   return runtimeToolMap[routePath] || null;
 };
 
-const formatAccessType = (accessType) => Number(accessType) === 2 ? '外部页面' : '站内页面';
+const formatAccessType = () => '站内页面';
 
 const formatResourceType = (resourceType) => {
   const typeMap = {
     FREE: '免费',
     CASH_ONLY: '付费',
-    CASH_POINT: '现金+积分',
+    CASH_POINT: '付费',
     VIP: 'VIP',
     SMALL_CLASS: '小班',
     INTERNAL: '内部',
@@ -578,6 +655,7 @@ const handleIframeToolMessage = (event) => {
   handleToolUsed(item, data.usageKey);
 };
 
+// TODO 后续改到 子页面直接调用接口先校验再使用,并扣数
 const handleToolUsed = async (item, usageKey) => {
   if (!item || !isPaidResourceType(item.resourceType)) {
     return;
@@ -742,7 +820,9 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
 
 <style scoped>
 .tool-container {
-  max-width: 1360px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -779,8 +859,8 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
 .btn-create-tool:hover { background: #18a058; color: #fff; }
 .tool-content-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
   align-items: start;
 }
 .list-main-section {
@@ -816,12 +896,26 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
 .tool-item-row-card.selected {
   border-color: #d03050;
 }
-.one-line-content {
+.tool-row-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 12px;
+}
+.tool-row-main,
+.tool-row-sub {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 48px;
-  padding: 8px 14px;
+  min-width: 0;
+}
+.tool-row-main {
+  min-height: 28px;
+}
+.tool-row-sub {
+  padding-left: 36px;
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 .collapser-wrapper {
   width: 24px;
@@ -851,11 +945,13 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
   flex-shrink: 0;
 }
 .title-section {
-  flex: 1;
+  flex: 1 1 420px;
   min-width: 0;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 4px;
   cursor: pointer;
 }
 .tag {
@@ -867,9 +963,10 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
   color: #333;
   font-size: 15px;
   font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
 }
 .description-text {
   color: #666;
@@ -877,13 +974,22 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 360px;
+}
+.access-type {
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .meta-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   color: #888;
   font-size: 12px;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .meta-item {
   white-space: nowrap;
@@ -900,11 +1006,10 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
   color: #18a058;
 }
 .action-group {
-  border-left: 1px solid #eee;
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  flex-shrink: 0;
-  padding-left: 12px;
+  flex: 0 1 auto;
 }
 .row-action-btn {
   border: 1px solid #d9d9d9;
@@ -942,6 +1047,15 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
   background: #18a058;
   border-color: #18a058;
   color: #fff;
+}
+.row-action-btn.question {
+  border-color: #18a058;
+  color: #13784b;
+}
+.row-action-btn.question:hover {
+  background: #f0faf5;
+  border-color: #18a058;
+  color: #18a058;
 }
 .row-action-btn.edit:hover {
   border-color: #4f46e5;
@@ -1109,19 +1223,17 @@ const rollbackFavorite = (tool, wasCollected, previousCount) => {
   }
 }
 @media (max-width: 900px) {
-  .one-line-content {
+  .tool-row-main {
     align-items: flex-start;
     flex-wrap: wrap;
   }
   .title-section {
     flex-basis: calc(100% - 36px);
   }
-  .meta-group,
-  .action-group {
-    margin-left: 36px;
+  .tool-row-sub {
+    padding-left: 36px;
   }
   .action-group {
-    border-left: 0;
     padding-left: 0;
   }
   .tool-embed-area {

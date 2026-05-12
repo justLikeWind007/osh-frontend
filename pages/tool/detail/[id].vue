@@ -36,7 +36,7 @@
             </div>
             <div class="metric-card">
               <span>访问方式</span>
-              <strong>{{ accessTypeLabel }}</strong>
+              <strong>站内工具</strong>
             </div>
           </div>
 
@@ -121,8 +121,7 @@
             </div>
             <div class="package-price">
               <span v-if="Number(item.price || 0) > 0" class="cash-price">¥{{ item.price }}</span>
-              <span v-if="Number(item.pointCost || 0) > 0" class="point-price">{{ item.pointCost }} 积分</span>
-              <span v-if="Number(item.price || 0) <= 0 && Number(item.pointCost || 0) <= 0" class="free-price">免费</span>
+              <span v-if="Number(item.price || 0) <= 0" class="free-price">免费</span>
             </div>
             <button
               class="buy-btn"
@@ -158,7 +157,7 @@ const { message } = createDiscreteApi(['message']);
 const resourceTypeMap = {
   FREE: '免费',
   CASH_ONLY: '付费',
-  CASH_POINT: '现金+积分',
+  CASH_POINT: '付费',
   VIP: 'VIP',
   SMALL_CLASS: '小班专属',
   INTERNAL: '内部',
@@ -187,7 +186,6 @@ watch(
 
 const tags = computed(() => tool.value?.tags || []);
 const resourceTypeLabel = computed(() => resourceTypeMap[tool.value?.resourceType] || tool.value?.resourceType || '免费');
-const accessTypeLabel = computed(() => Number(tool.value?.accessType) === 2 ? '第三方 iframe' : '站内工具');
 const isPaidTool = computed(() => ['CASH_ONLY', 'CASH_POINT'].includes(tool.value?.resourceType));
 const packages = computed(() => {
   const list = tool.value?.packages;

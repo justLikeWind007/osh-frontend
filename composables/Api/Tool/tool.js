@@ -46,6 +46,14 @@ export async function apiToolDetail(id) {
   });
 }
 
+export async function apiRecordToolView(id) {
+  return $fetch(`/tool/view/${id}`, {
+    method: 'POST',
+    baseURL,
+    headers: getToolAuthHeaders(),
+  });
+}
+
 export async function apiToolRecommend(body) {
   return $fetch('/tool/recommend', {
     method: 'POST',

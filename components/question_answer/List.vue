@@ -8,6 +8,7 @@
           <option value="course">课程</option>
           <option value="website">网站</option>
           <option value="电子书">电子书</option>
+          <option value="tool">工具</option>
         </select>
         <input 
           v-model.number="filter.resourceNo" 

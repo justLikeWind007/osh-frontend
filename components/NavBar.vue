@@ -154,6 +154,11 @@ const FeedbackIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 18 18
   h('path', { d: 'M7 8h4M7 11h2', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round' })
 ]);
 
+const AuditIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 18 18', fill: 'none' }, [
+  h('path', { d: 'M5 2h8a1 1 0 011 1v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('path', { d: 'M7 6h4M7 9h4M7 12l1 1 3-3', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })
+]);
+
 const PlanIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 18 18', fill: 'none' }, [
   h('rect', { x: '2', y: '3', width: '14', height: '12', rx: '2', stroke: 'currentColor', 'stroke-width': '1.5' }),
   h('path', { d: 'M6 7h6M6 10h4M9 3v2', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round' }),
@@ -172,7 +177,8 @@ const menus = ref([
   { name: '工具', path: '/tool/1', match: [{ name: 'tool-page' }], iconComponent: ToolIcon },
   { name: '信息差', path: '/info_gap/1', match: [{ name: 'info_gap-page' }], iconComponent: InfoIcon },
   { name: '反馈', path: '/feedback/list', match: [{ name: 'feedback-list' }], iconComponent: FeedbackIcon },
-  { name: '内部网站', path: '/site', iconComponent: SiteIcon }
+  { name: '内部网站', path: '/site', iconComponent: SiteIcon },
+  { name: '审核', path: '/audit', match: [{ name: 'audit' }], iconComponent: AuditIcon }
 ]);
 
 onMounted(() => {
