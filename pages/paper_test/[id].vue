@@ -338,24 +338,25 @@ function scrollToDom(index) {
 }
 
 // 阻止切换其他页面
+// 仅对真正在考试的用户拦截后退；管理员（题目管理）走的是出题/编辑流程，
+// 拦截会让浏览器左上角的后退箭头看起来失灵（弹窗常被新增/编辑题目弹窗遮住）。
 const disableBack = ref(true);
 onBeforeRouteLeave((to, from, next) => {
-  if (!disableBack.value) {
+  if (showQuestionAdmin.value || !disableBack.value) {
     next();
-  } else {
-    const { dialog: d } = createDiscreteApi(['dialog']);
-    d.warning({
-      content: '是否要放弃考试？',
-      positiveText: '确定',
-      negativeText: '取消',
-      onPositiveClick() {
-        disableBack.value = false;
-        navigateTo(to.fullPath || '/', { replace: true });
-      },
-    });
-
-    next(false);
+    return;
   }
+  const { dialog: d } = createDiscreteApi(['dialog']);
+  d.warning({
+    content: '是否要放弃考试？',
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick() {
+      disableBack.value = false;
+      navigateTo(to.fullPath || '/', { replace: true });
+    },
+  });
+  next(false);
 });
 
 // 交卷

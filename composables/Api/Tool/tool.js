@@ -46,6 +46,23 @@ export async function apiToolDetail(id) {
   });
 }
 
+export async function apiRecordToolView(id) {
+  return $fetch(`/tool/view/${id}`, {
+    method: 'POST',
+    baseURL,
+    headers: getToolAuthHeaders(),
+  });
+}
+
+export async function apiToolRecommend(body) {
+  return $fetch('/tool/recommend', {
+    method: 'POST',
+    baseURL,
+    headers: getToolAuthHeaders(),
+    body,
+  });
+}
+
 export async function apiSaveTool(body) {
   return $fetch('/tool/save', {
     method: 'POST',
@@ -55,14 +72,12 @@ export async function apiSaveTool(body) {
   });
 }
 
-export async function apiUploadToolCover(file) {
-  const form = new FormData();
-  form.append('file', file);
-  return $fetch('/tool/cover/upload', {
+export async function apiUpdateTool(body) {
+  return $fetch('/tool/update', {
     method: 'POST',
     baseURL,
     headers: getToolAuthHeaders(),
-    body: form,
+    body,
   });
 }
 
@@ -90,5 +105,32 @@ export async function apiDeleteTool(ids) {
     baseURL,
     headers: getToolAuthHeaders(),
     body: { ids },
+  });
+}
+
+export async function apiConsumeToolUsage(body) {
+  return $fetch('/tool/use/consume', {
+    method: 'POST',
+    baseURL,
+    headers: getToolAuthHeaders(),
+    body,
+  });
+}
+
+export async function apiVoteGoodTool(toolId) {
+  return $fetch('/tool/vote/good', {
+    method: 'POST',
+    baseURL,
+    headers: getToolAuthHeaders(),
+    body: { toolId },
+  });
+}
+
+export async function apiVoteBadTool(toolId) {
+  return $fetch('/tool/vote/bad', {
+    method: 'POST',
+    baseURL,
+    headers: getToolAuthHeaders(),
+    body: { toolId },
   });
 }

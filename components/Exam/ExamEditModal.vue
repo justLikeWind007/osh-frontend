@@ -48,20 +48,26 @@
       </n-grid>
 
       <n-form-item label="关联资源">
-        <n-space>
+        <n-space :wrap="false" style="width: 100%">
           <n-select
             v-model:value="formValue.resourceType"
             :options="resourceTypeOptions"
             placeholder="资源类型（可不选）"
             clearable
-            style="width: 160px"
+            style="width: 160px; flex: none"
+            @update:value="onResourceTypeChange"
           />
-          <n-input-number
+          <n-select
             v-if="formValue.resourceType"
             v-model:value="formValue.resourceId"
-            placeholder="资源ID"
-            :min="1"
-            style="width: 160px"
+            :options="resourceOptions"
+            :loading="resourceSearching"
+            filterable
+            remote
+            clearable
+            placeholder="输入名称搜索并选择"
+            style="flex: 1; min-width: 0"
+            @search="onResourceSearch"
           />
         </n-space>
       </n-form-item>
@@ -116,6 +122,7 @@ import {
   NButton, NGrid, NGridItem, NDatePicker,
 } from 'naive-ui'
 import { apiSaveExam } from '~/composables/Api/Exam/exam'
+import { fetchConfig } from '~/composables/useHttp'
 
 const props = defineProps({
   show:       Boolean,
@@ -135,6 +142,133 @@ const resourceTypeOptions = [
   { label: '课程', value: 'course' },
   { label: '电子书', value: 'book' },
 ]
+
+// Resource picker (按标题搜索课程/电子书) state
+const resourceOptions = ref([])
+const resourceSearching = ref(false)
+let resourceSearchTimer = null
+
+// Reuses the project's baseURL + auth headers convention to avoid touching shared API files.
+function buildResourceHeaders() {
+  const headers = { appid: fetchConfig.headers.appid }
+  if (process.client) {
+    const tokenValue =
+      localStorage.getItem('token') ||
+      localStorage.getItem('Token') ||
+      ''
+    if (tokenValue) {
+      headers.token = tokenValue
+      headers.Authorization = `Bearer ${tokenValue}`
+    }
+  }
+  return headers
+}
+
+// One-shot $fetch against /course/search or /book/search.
+async function fetchResourceList(type, keyword = '') {
+  if (!type) return []
+  const url = type === 'course' ? '/course/search' : '/book/search'
+  const body = { pageNum: 1, pageSize: 20 }
+  if (keyword) body.title = keyword
+  try {
+    const res = await $fetch(url, {
+      baseURL: fetchConfig.baseURL,
+      method: 'POST',
+      headers: buildResourceHeaders(),
+      body,
+    })
+    const payload = res?.data || res || {}
+    return payload.rows || payload.records || []
+  } catch (e) {
+    return []
+  }
+}
+
+// Fetch a single resource's title by ID.
+// Used when the saved resourceId is not in the top-20 search results,
+// so the dropdown still shows the real name instead of "#<id>".
+async function fetchResourceTitleById(type, id) {
+  if (!type || id == null) return ''
+  try {
+    if (type === 'course') {
+      const res = await $fetch(`/course/detail/${id}`, {
+        baseURL: fetchConfig.baseURL,
+        headers: buildResourceHeaders(),
+      })
+      const data = res?.data || res || {}
+      return data.title || ''
+    }
+    // book
+    const res = await $fetch('/book/getById', {
+      baseURL: fetchConfig.baseURL,
+      method: 'GET',
+      headers: buildResourceHeaders(),
+      params: { id: Number(id) },
+    })
+    const data = res?.data || res || {}
+    return data.title || ''
+  } catch (e) {
+    return ''
+  }
+}
+
+async function loadResourceOptions(type, keyword = '') {
+  if (!type) {
+    resourceOptions.value = []
+    return
+  }
+  resourceSearching.value = true
+  try {
+    const list = await fetchResourceList(type, keyword)
+    resourceOptions.value = list.map((item) => ({
+      label: item.title || `#${item.id}`,
+      value: item.id,
+    }))
+  } finally {
+    resourceSearching.value = false
+  }
+}
+
+function onResourceTypeChange(newType) {
+  // Switching type (or clearing it) must wipe the previously picked id,
+  // otherwise we'd submit a course-id while resourceType is "book".
+  formValue.resourceId = null
+  resourceOptions.value = []
+  if (newType) loadResourceOptions(newType, '')
+}
+
+function onResourceSearch(keyword) {
+  if (resourceSearchTimer) clearTimeout(resourceSearchTimer)
+  resourceSearchTimer = setTimeout(() => {
+    loadResourceOptions(formValue.resourceType, keyword || '')
+  }, 300)
+}
+
+// When the modal opens on an exam that already has resource_type + resource_id,
+// load top-N options and make sure the saved one is selectable AND shown by name.
+// If the saved resource isn't in the top-N results, we fetch its title by ID
+// so the dropdown shows the real name (e.g. "Java 入门") instead of just the ID.
+async function syncResourceOptionsForInitData() {
+  if (!formValue.resourceType) {
+    resourceOptions.value = []
+    return
+  }
+  const type = formValue.resourceType
+  const savedId = formValue.resourceId
+  await loadResourceOptions(type, '')
+  // resourceType may have changed by the time the request returns (race guard).
+  if (type !== formValue.resourceType) return
+  if (savedId == null) return
+  if (resourceOptions.value.some((o) => o.value === savedId)) return
+
+  // Saved resource not in the top page — look it up by ID to display the real title.
+  const title = await fetchResourceTitleById(type, savedId)
+  if (type !== formValue.resourceType || savedId !== formValue.resourceId) return
+  resourceOptions.value = [
+    { label: title || `#${savedId}`, value: savedId },
+    ...resourceOptions.value,
+  ]
+}
 
 const formValue = reactive({
   id:           null,
@@ -167,8 +301,10 @@ watch(() => props.show, (val) => {
     formValue.tags         = Array.isArray(props.initData.tags) ? [...props.initData.tags] : []
     formValue.startTimeTs  = props.initData.start_time ? new Date(props.initData.start_time).getTime() : null
     formValue.endTimeTs    = props.initData.end_time   ? new Date(props.initData.end_time).getTime()   : null
+    syncResourceOptionsForInitData()
   } else {
     resetForm()
+    resourceOptions.value = []
   }
 })
 
@@ -185,6 +321,7 @@ function resetForm() {
   formValue.tags         = []
   formValue.startTimeTs  = null
   formValue.endTimeTs    = null
+  resourceOptions.value  = []
 }
 
 function onCreateTag(inputVal) {
@@ -211,6 +348,11 @@ async function handleSave() {
   }
   if (!formValue.expire || formValue.expire < 1) {
     message.warning('请输入有效时长')
+    return
+  }
+  // 已选资源类型却没选具体资源 → 视为半填写，禁止提交，避免脏数据
+  if (formValue.resourceType && !formValue.resourceId) {
+    message.warning('请选择具体的关联资源，或清空资源类型')
     return
   }
 
