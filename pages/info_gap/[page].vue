@@ -94,8 +94,7 @@
                   <n-space :size="4">
                     <n-button
                       size="tiny"
-                      :color="item.isVoted === 1 ? '#18a058' : '#26a67a'"
-                      text-color="#fff"
+                      :type="item.isVoted === 1 ? 'primary' : 'default'"
                       @click.stop="handleVote(item, 1)"
                     >
                       👍 {{ item.goodCount }}
@@ -103,8 +102,7 @@
 
                     <n-button
                       size="tiny"
-                      :color="item.isVoted === 2 ? '#18a058' : '#718b9c'"
-                      text-color="#fff"
+                      :type="item.isVoted === 2 ? 'info' : 'default'"
                       @click.stop="handleVote(item, 2)"
                     >
                       😐 {{ item.middleCount }}
@@ -112,8 +110,7 @@
 
                     <n-button
                       size="tiny"
-                      :color="item.isVoted === 3 ? '#18a058' : '#e53e3e'"
-                      text-color="#fff"
+                      :type="item.isVoted === 3 ? 'error' : 'default'"
                       @click.stop="handleVote(item, 3)"
                     >
                       👎 {{ item.badCount }}
@@ -122,7 +119,7 @@
                     <n-button
                       size="tiny"
                       :secondary="!item.isFollowed"
-                      :type="item.isFollowed ? 'primary' : 'default'"
+                      :type="item.isFollowed ? 'warning' : 'warning'"
                       strong
                       @click.stop="handleFollow(item)"
                     >
