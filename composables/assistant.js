@@ -98,10 +98,7 @@ export function apiAskCourseQuestion(courseId, question) {
 }
 
 export function apiCreateAssistantFeedback(payload) {
-  return assistantFetch('/assistant/feedback/create', {
-    method: 'POST',
-    body: payload,
-  })
+  return apiCreateFeedback(payload)
 }
 
 export function apiGetMyAssistantFeedback() {

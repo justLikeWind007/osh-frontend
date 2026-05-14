@@ -20,16 +20,21 @@
     </div>
 
     <div class="view-mode-box">
-      <n-space>
-        <n-button
+      <n-tabs
+        :value="queryMode"
+        type="line"
+        size="medium"
+        animated
+        @update:value="selectQueryMode"
+      >
+        <n-tab
           v-for="option in queryModeOptions"
           :key="option.value"
-          :type="queryMode === option.value ? 'primary' : 'default'"
-          @click="selectQueryMode(option.value)"
+          :name="option.value"
         >
           {{ option.label }}
-        </n-button>
-      </n-space>
+        </n-tab>
+      </n-tabs>
     </div>
 
     <!-- 公告区 -->
@@ -53,51 +58,35 @@
 
     <!-- 筛选器 -->
     <div class="filter-box">
-      <div class="filter-row">
-        <n-space>
-          <n-button
-            :type="selectedCategoryId === null ? 'primary' : 'default'"
-            @click="selectCategory(null)"
-          >
-            全部
-          </n-button>
-          <n-button
-            v-for="category in categories"
-            :key="category.id"
-            :type="selectedCategoryId === category.id ? 'primary' : 'default'"
-            @click="selectCategory(category.id)"
-          >
-            {{ resolveFeedbackCategoryIcon(category) }} {{ category.name }}
-          </n-button>
-        </n-space>
+      <div class="category-chip-row">
+        <button
+          type="button"
+          class="category-chip"
+          :class="{ 'is-active': selectedCategoryId === null }"
+          @click="selectCategory(null)"
+        >
+          全部
+        </button>
+        <button
+          v-for="category in categories"
+          :key="category.id"
+          type="button"
+          class="category-chip"
+          :class="{ 'is-active': selectedCategoryId === category.id }"
+          @click="selectCategory(category.id)"
+        >
+          <span class="chip-icon">{{ resolveFeedbackCategoryIcon(category) }}</span>
+          <span class="chip-label">{{ category.name }}</span>
+        </button>
       </div>
       <div class="filter-row">
         <div class="filter-row-content">
-          <n-select
-            v-model:value="selectedTagIds"
-            multiple
-            clearable
-            filterable
-            max-tag-count="responsive"
-            :options="tagOptions"
-            placeholder="按标签筛选"
-            style="width: 220px; margin-right: 12px;"
-            @update:value="handleTagChange"
-          />
-          <n-select
-            v-model:value="selectedStatus"
-            :options="statusOptions"
-            clearable
-            placeholder="全部状态"
-            style="width: 140px; margin-right: 12px;"
-            @update:value="handleStatusChange"
-          />
           <n-input
             v-model:value="keyword"
             placeholder="搜索反馈标题或内容..."
             clearable
+            class="filter-search"
             @keyup.enter="handleSearch"
-            style="flex: 1;"
           >
             <template #suffix>
               <n-button text @click="handleSearch">
@@ -106,9 +95,28 @@
             </template>
           </n-input>
           <n-select
+            v-model:value="selectedTagIds"
+            multiple
+            clearable
+            filterable
+            max-tag-count="responsive"
+            :options="tagOptions"
+            placeholder="按标签筛选"
+            class="filter-control filter-tags"
+            @update:value="handleTagChange"
+          />
+          <n-select
+            v-model:value="selectedStatus"
+            :options="statusOptions"
+            clearable
+            placeholder="全部状态"
+            class="filter-control filter-status"
+            @update:value="handleStatusChange"
+          />
+          <n-select
             v-model:value="sortType"
             :options="sortOptions"
-            style="width: 140px; margin-left: 12px;"
+            class="filter-control filter-sort"
             @update:value="handleSortChange"
           />
         </div>
@@ -142,11 +150,21 @@
           </div>
           <p class="card-content">{{ item.contentPreview || '' }}{{ item.contentPreview ? '...' : '' }}</p>
           <div class="card-footer">
-            <span class="user">👤 {{ getFeedbackUserName(item) }}</span>
-            <span class="stats">
-              👍 {{ item.likeCount || 0 }} · ⭐ {{ item.favoriteCount || 0 }} · 💬 {{ item.commentCount }} · 👁 {{ item.viewCount }}
-            </span>
-            <span class="time">📅 {{ formatTime(item.createTime) }}</span>
+            <div class="card-footer-meta">
+              <span class="footer-user">👤 {{ getFeedbackUserName(item) }}</span>
+              <span class="footer-time">{{ formatTime(item.createTime) }}</span>
+            </div>
+            <div class="card-footer-stats">
+              <span class="stat-chip" title="点赞数">
+                <span class="stat-icon">👍</span>{{ item.likeCount || 0 }}
+              </span>
+              <span class="stat-chip" title="评论数">
+                <span class="stat-icon">💬</span>{{ item.commentCount || 0 }}
+              </span>
+              <span class="stat-chip" title="浏览数">
+                <span class="stat-icon">👁</span>{{ item.viewCount || 0 }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -154,10 +172,6 @@
 
     <!-- 普通反馈列表 -->
     <div class="feedback-section">
-      <div class="section-header">
-        <span class="icon">📋</span>
-        <span class="title">{{ currentSectionTitle }}</span>
-      </div>
       <div v-if="loading" class="loading-box">
         <div class="feedback-skeleton-list">
           <div v-for="index in pageSize" :key="index" class="feedback-skeleton-card">
@@ -192,11 +206,21 @@
           </div>
           <p class="card-content">{{ item.contentPreview || '' }}{{ item.contentPreview ? '...' : '' }}</p>
           <div class="card-footer">
-            <span class="user">👤 {{ getFeedbackUserName(item) }}</span>
-            <span class="stats">
-              👍 {{ item.likeCount || 0 }} · ⭐ {{ item.favoriteCount || 0 }} · 💬 {{ item.commentCount }} · 👁 {{ item.viewCount }}
-            </span>
-            <span class="time">📅 {{ formatTime(item.createTime) }}</span>
+            <div class="card-footer-meta">
+              <span class="footer-user">👤 {{ getFeedbackUserName(item) }}</span>
+              <span class="footer-time">{{ formatTime(item.createTime) }}</span>
+            </div>
+            <div class="card-footer-stats">
+              <span class="stat-chip" title="点赞数">
+                <span class="stat-icon">👍</span>{{ item.likeCount || 0 }}
+              </span>
+              <span class="stat-chip" title="评论数">
+                <span class="stat-icon">💬</span>{{ item.commentCount || 0 }}
+              </span>
+              <span class="stat-chip" title="浏览数">
+                <span class="stat-icon">👁</span>{{ item.viewCount || 0 }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -215,7 +239,7 @@
 import { ref, onMounted, computed, onActivated, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { NButton, NInput, NSpace, NBreadcrumb, NBreadcrumbItem, NSpin, NEmpty, NSelect } from 'naive-ui'
+import { NButton, NInput, NSpace, NBreadcrumb, NBreadcrumbItem, NSpin, NEmpty, NSelect, NTabs, NTab } from 'naive-ui'
 import { 
   apiGetFeedbackCategories, 
   apiGetFeedbackTags,
@@ -224,6 +248,7 @@ import {
   resolveFeedbackStatusText,
   resolveFeedbackErrorMessage
 } from '~/composables/assistant'
+import { sortFeedbackTags } from '~/composables/feedbackTag'
 import { applyFeedbackInteractionPatches } from '~/composables/useFeedbackState'
 
 const router = useRouter()
@@ -237,7 +262,8 @@ const feedbackList = ref([])
 const queryMode = ref('all')
 const selectedCategoryId = ref(null)
 const selectedTagIds = ref([])
-const selectedStatus = ref(null)
+// 默认选中「待处理」：用户进入列表通常关心未处理的反馈
+const selectedStatus = ref('PENDING')
 const keyword = ref('')
 const sortType = ref('hot') // 默认按最热排序
 const pageNum = ref(1)
@@ -272,15 +298,6 @@ const tagOptions = computed(() => feedbackTags.value.map(tag => ({
   value: tag.id
 })))
 const showAnnouncements = computed(() => queryMode.value === 'all')
-const currentSectionTitle = computed(() => {
-  if (queryMode.value === 'mine') {
-    return '我的反馈'
-  }
-  if (queryMode.value === 'favorite') {
-    return '我的收藏'
-  }
-  return '全部反馈'
-})
 const emptyDescription = computed(() => {
   if (queryMode.value === 'mine') {
     return '暂无我的反馈'
@@ -334,7 +351,7 @@ async function loadCategories() {
 async function loadTags() {
   try {
     const res = await apiGetFeedbackTags()
-    feedbackTags.value = res.data || []
+    feedbackTags.value = sortFeedbackTags(res.data || [])
   } catch (error) {
     message.error(resolveFeedbackErrorMessage(error, '加载标签失败'))
     console.error('加载标签失败:', error)
@@ -343,9 +360,9 @@ async function loadTags() {
 
 async function loadAnnouncements() {
   try {
+    // 公告独立于状态筛选展示，避免默认状态过滤掉公告
     const res = await apiPageFeedback({
       isAnnouncement: 1,
-      status: selectedStatus.value,
       pageNum: 1,
       pageSize: 5
     })
@@ -362,6 +379,11 @@ async function loadFeedback() {
     pageNum.value = 1
     hasUserScrolled.value = false
     await fetchFeedbackPage(pageNum.value)
+    if (showAnnouncements.value) {
+      await loadAnnouncements()
+      return
+    }
+    announcements.value = []
   } catch (error) {
     message.error(resolveFeedbackErrorMessage(error, '加载反馈失败'))
     console.error('加载反馈失败:', error)
@@ -555,6 +577,7 @@ function destroyLoadMoreObserver() {
 
 .view-mode-box {
   margin-bottom: 20px;
+  border-bottom: 1px solid #eef0f3;
 }
 
 .feedback-skeleton-list {
@@ -700,7 +723,7 @@ function destroyLoadMoreObserver() {
 /* 筛选器 */
 .filter-box {
   background: #fff;
-  padding: 16px 20px;
+  padding: 14px 20px;
   border-radius: 8px;
   margin-bottom: 24px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -718,6 +741,68 @@ function destroyLoadMoreObserver() {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-search {
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+
+.filter-control {
+  flex: 0 0 auto;
+}
+
+.filter-tags {
+  width: 200px;
+}
+
+.filter-status {
+  width: 130px;
+}
+
+.filter-sort {
+  width: 130px;
+}
+
+/* 类目筛选 chip */
+.category-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  user-select: none;
+}
+
+.category-chip:hover {
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+}
+
+.category-chip.is-active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.category-chip .chip-icon {
+  font-size: 14px;
 }
 
 /* 区块标题 */
@@ -753,12 +838,16 @@ function destroyLoadMoreObserver() {
 
 /* 反馈卡片 */
 .feedback-card {
+  display: flex;
+  flex-direction: column;
+  height: 232px;
   background: #fff;
   border-radius: 8px;
   padding: 16px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  overflow: hidden;
 }
 
 .feedback-card:hover {
@@ -769,6 +858,7 @@ function destroyLoadMoreObserver() {
 .feedback-card.pinned {
   border: 2px solid #ff9800;
   background: linear-gradient(135deg, #fff 0%, #fff8f0 100%);
+  padding: 14px;
 }
 
 .pin-badge {
@@ -784,19 +874,24 @@ function destroyLoadMoreObserver() {
 .card-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  height: 24px;
   margin-bottom: 8px;
+  overflow: hidden;
 }
 
 .category-icon {
-  font-size: 18px;
-  margin-right: 6px;
+  font-size: 16px;
+  flex-shrink: 0;
 }
 
 .category-name {
   font-size: 13px;
   color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-badge {
@@ -805,6 +900,7 @@ function destroyLoadMoreObserver() {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .status-PENDING {
@@ -828,10 +924,12 @@ function destroyLoadMoreObserver() {
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: #1f2937;
   margin: 0 0 8px 0;
+  height: 22px;
+  line-height: 22px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -839,48 +937,100 @@ function destroyLoadMoreObserver() {
 
 .tag-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 12px 0;
+  flex-wrap: nowrap;
+  gap: 6px;
+  height: 22px;
+  margin: 0 0 8px 0;
+  overflow: hidden;
 }
 
 .feedback-tag {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  height: 22px;
+  padding: 0 10px;
   border-radius: 999px;
   background: #eff6ff;
   color: #1d4ed8;
   font-size: 12px;
   line-height: 1;
+  flex-shrink: 0;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-content {
-  font-size: 14px;
-  color: #666;
-  line-height: 1.6;
-  margin: 0 0 12px 0;
+  flex: 1;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.55;
+  margin: 0 0 10px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  min-height: 0;
 }
 
 .card-footer {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.card-footer-meta {
+  display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
-  color: #999;
+  color: #6b7280;
+  height: 16px;
 }
 
-.card-footer .user,
-.card-footer .stats,
-.card-footer .time {
-  display: flex;
+.footer-user {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer-time {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.card-footer-stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  height: 22px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.stat-chip .stat-icon {
+  font-size: 12px;
 }
 
 /* 加载状态 */
