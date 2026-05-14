@@ -411,6 +411,7 @@ const loadData = async () => {
         goodCount: row.goodCount || 0,
         middleCount: row.middleCount || 0,
         badCount: row.badCount || 0,
+        collectCount: Number(row.collectCount || 0),
         isFollowed: !!row.isFollowed,
         isExpanded: false,
         tag1: row.tag1 || '',
@@ -603,11 +604,16 @@ const handleFollow = async (item) => {
 
   // 本地先更新 UI，失败再回滚
   const originalStatus = item.isFollowed;
+  const originalCollectCount = Number(item.collectCount || 0);
   item.isFollowed = !item.isFollowed;
+  item.collectCount = Math.max(
+    0,
+    originalCollectCount + (item.isFollowed ? 1 : -1)
+  );
 
   try {
     const { error } = await useHttpGet(
-      'info-follow',
+      `info-follow-${item.id}`,
       `/info_gap/collect`,
         {
           params: { infoGapId: item.id },
@@ -617,9 +623,10 @@ const handleFollow = async (item) => {
 
     if (error.value) throw error.value;
 
-    message.success(item.isFollowed ? '收藏成功' : '收藏失败！');
+    message.success(item.isFollowed ? '收藏成功' : '取消收藏成功');
   } catch (err) {
     item.isFollowed = originalStatus;
+    item.collectCount = originalCollectCount;
     message.error('收藏失败，请检查网络！！！');
   }
 };
