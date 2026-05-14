@@ -38,7 +38,11 @@ import { NCarousel } from "naive-ui";
 <style scoped>
 .hot-wrap {
   width: 100%;
+  position: sticky;
+  top: 84px;
+  align-self: start;
 }
+
 
 .hot-title {
   margin-bottom: 10px;

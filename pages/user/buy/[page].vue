@@ -13,7 +13,7 @@ import {
     NPagination
 } from "naive-ui"
 
-useHead({ title:"购买记录" })
+useHead({ title:"订单记录" })
 
 const {
     page,

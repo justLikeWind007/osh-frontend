@@ -72,6 +72,7 @@ export const clearPermissions = () => {
   if (process.client) {
     localStorage.removeItem('__permissions__')
     localStorage.removeItem('__user_role__')
+    localStorage.removeItem('__user_asset__')
   }
 }
 
@@ -121,10 +122,21 @@ export async function useRefreshUserInfo(){
         } = await useGetinfoApi()
 
         if(data.value){
-            // 合并数据，保留 permissionList 等登录时存的字段
+            // 从 localStorage 恢复 asset，避免 getinfo 不返回 asset 时丢失
+            let restoredAsset = user.value?.asset || null
+            if (!restoredAsset && process.client) {
+                try {
+                    const stored = localStorage.getItem('__user_asset__')
+                    restoredAsset = stored ? JSON.parse(stored) : null
+                } catch {}
+            }
+
+            // 合并数据，保留 permissionList、asset 等登录时存的字段
             user.value = {
                 ...user.value,
                 ...data.value,
+                // getinfo 不返回 asset，手动补回
+                asset: restoredAsset,
             }
             if (process.client && data.value.role) {
               try {

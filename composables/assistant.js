@@ -108,6 +108,7 @@ export function apiGetMyAssistantFeedback() {
   return assistantFetch('/assistant/feedback/page', {
     method: 'POST',
     body: {
+      queryMode: 'mine',
       pageNum: 1,
       pageSize: 50,
     },
@@ -126,14 +127,27 @@ export function apiGetFeedbackCategories() {
   })
 }
 
+export function apiGetFeedbackTags(params = {}) {
+  return $fetch('/public/feedback/tag/list', {
+    baseURL: fetchConfig.baseURL,
+    headers: { appid: fetchConfig.headers.appid },
+    query: params,
+  })
+}
+
+export function apiCreateFeedbackTag(payload) {
+  return assistantFetch('/assistant/feedback/tag/create', {
+    method: 'POST',
+    body: payload,
+  })
+}
+
 /**
  * 分页查询反馈列表
  */
 export function apiPageFeedback(params) {
-  return $fetch('/public/feedback/page', {
-    baseURL: fetchConfig.baseURL,
+  return assistantFetch('/public/feedback/page', {
     method: 'POST',
-    headers: { appid: fetchConfig.headers.appid },
     body: params,
   })
 }
@@ -179,16 +193,6 @@ export function apiCreateFeedback(payload) {
   return assistantFetch('/assistant/feedback/create', {
     method: 'POST',
     body: payload,
-  })
-}
-
-/**
- * 我的反馈列表（分页）
- */
-export function apiMyFeedback(params) {
-  return assistantFetch('/assistant/feedback/page', {
-    method: 'POST',
-    body: params,
   })
 }
 

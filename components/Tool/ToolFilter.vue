@@ -63,7 +63,6 @@ const resourceOptions = [
   { label: '全部', value: 'all' },
   { label: '免费', value: 'FREE' },
   { label: '付费', value: 'CASH_ONLY' },
-  { label: '现金+积分', value: 'CASH_POINT' },
   { label: 'VIP', value: 'VIP' },
   { label: '小班专属', value: 'SMALL_CLASS' },
   { label: '内部', value: 'INTERNAL' },

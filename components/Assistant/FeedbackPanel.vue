@@ -299,6 +299,10 @@ function openTicketDetail(item) {
 }
 
 function statusLabel(status) {
+  if (status === 'PENDING') return '待处理'
+  if (status === 'PROCESSING') return '处理中'
+  if (status === 'RESOLVED') return '已解决'
+  if (status === 'CLOSED') return '已关闭'
   if (status === 'triaged') return '已确认'
   if (status === 'in_progress') return '修复中'
   if (status === 'resolved') return '已修复'
@@ -328,45 +332,52 @@ function formatTime(value) {
 
 const ticketFlowSteps = [
   {
-    key: 'submitted',
+    key: 'PENDING',
     title: '工单已提交',
     desc: '你的反馈已经成功提交，等待系统或人工接收。',
   },
   {
-    key: 'triaged',
-    title: '已确认',
-    desc: '工单已被接收并完成初步确认，准备进入处理阶段。',
-  },
-  {
-    key: 'processing',
+    key: 'PROCESSING',
     title: '处理中',
-    desc: '我们正在排查、修复或跟进这个问题。',
+    desc: '工单已被接收，正在排查、修复或持续跟进。',
   },
   {
-    key: 'closed',
-    title: '已结单',
-    desc: '问题已处理完成，工单进入结束状态。',
+    key: 'RESOLVED',
+    title: '已解决',
+    desc: '问题已经处理完成，等待用户确认结果。',
+  },
+  {
+    key: 'CLOSED',
+    title: '已关闭',
+    desc: '工单结束流转，进入关闭状态。',
   },
 ]
 
 function flowStepState(key) {
   const status = selectedTicket.value?.status
   if (!status) return ''
-  if (status === 'submitted') {
-    return key === 'submitted' ? 'current' : ''
+  const normalizedStatus = (() => {
+    if (status === 'submitted') return 'PENDING'
+    if (status === 'triaged' || status === 'in_progress' || status === 'processing') return 'PROCESSING'
+    if (status === 'resolved') return 'RESOLVED'
+    if (status === 'closed' || status === 'rejected') return 'CLOSED'
+    return status
+  })()
+  if (normalizedStatus === 'PENDING') {
+    return key === 'PENDING' ? 'current' : ''
   }
-  if (status === 'triaged') {
-    if (key === 'submitted') return 'done'
-    if (key === 'triaged') return 'current'
+  if (normalizedStatus === 'PROCESSING') {
+    if (key === 'PENDING') return 'done'
+    if (key === 'PROCESSING') return 'current'
     return ''
   }
-  if (status === 'in_progress') {
-    if (key === 'submitted' || key === 'triaged') return 'done'
-    if (key === 'processing') return 'current'
+  if (normalizedStatus === 'RESOLVED') {
+    if (key === 'PENDING' || key === 'PROCESSING') return 'done'
+    if (key === 'RESOLVED') return 'current'
     return ''
   }
-  if (status === 'resolved' || status === 'closed' || status === 'rejected') {
-    return 'done'
+  if (normalizedStatus === 'CLOSED') {
+    if (key === 'PENDING' || key === 'PROCESSING' || key === 'RESOLVED' || key === 'CLOSED') return 'done'
   }
   return ''
 }

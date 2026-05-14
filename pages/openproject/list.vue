@@ -29,10 +29,15 @@
           <div class="card-inner" @click="toggleExpand(item)">
             <div class="card-header">
               <div class="title-row">
+                <!-- 箭头在最左，放大 -->
+                <span class="expand-icon" :class="{ open: expandedId === item.id }">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </span>
                 <span class="project-title">{{ item.projectName }}</span>
                 <div class="title-right">
                   <n-tag v-if="item.isArchived === 1" size="small" type="warning">已归档</n-tag>
-                  <span class="expand-icon" :class="{ open: expandedId === item.id }">▾</span>
                 </div>
               </div>
               <div class="project-tags">
@@ -48,13 +53,6 @@
 
             <div class="card-body">
               <p class="project-desc">{{ item.projectDesc || '暂无描述' }}</p>
-              <div class="github-stats">
-                <span class="stat-item"><StarIcon />{{ item.starCount ?? '-' }}</span>
-                <span class="stat-item"><ForkIcon />{{ item.forkCount ?? '-' }}</span>
-                <span v-if="item.lastCommitTime" class="stat-item last-commit">
-                  最近提交：{{ formatDate(item.lastCommitTime) }}
-                </span>
-              </div>
             </div>
 
             <div class="card-footer">
@@ -62,11 +60,18 @@
                 <n-avatar :size="24" :src="item.projectCover || defaultCover" />
                 <span class="author-name">{{ item.authorName || '匿名' }}</span>
               </div>
+              <!-- 右侧：stats 纵向 + 收藏 -->
               <div class="footer-right">
+                <div class="github-stats">
+                  <span class="stat-item"><StarIcon />{{ item.starCount ?? '-' }}</span>
+                  <span class="stat-item"><ForkIcon />{{ item.forkCount ?? '-' }}</span>
+                  <span v-if="item.lastCommitTime" class="stat-item last-commit">
+                    最近提交：{{ formatDate(item.lastCommitTime) }}
+                  </span>
+                </div>
                 <n-button
                   text
-                  size="small"
-                  :style="{ color: item.favorited ? '#f59e0b' : '#9ca3af' }"
+                  :style="{ color: item.favorited ? '#f59e0b' : '#9ca3af', fontSize: '24px', lineHeight: '1' }"
                   @click.stop="toggleFavorite(item)"
                   :title="item.favorited ? '取消收藏' : '收藏'"
                 >
@@ -332,9 +337,9 @@ onMounted(() => {
 .empty-box { display: flex; justify-content: center; align-items: center; height: 300px; }
 
 .project-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   margin-top: 24px;
 }
 
@@ -350,51 +355,93 @@ onMounted(() => {
 }
 .project-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.09); border-color: #d0d7de; }
 .project-card.expanded {
-  grid-column: 1 / -1;   /* 展开时占满整行 */
   border-color: #4096ff;
   box-shadow: 0 4px 16px rgba(64,150,255,0.15);
 }
 .project-card.archived { opacity: 0.75; }
 
-.card-inner { display: flex; flex-direction: column; }
+/* 卡片内部：横向三段布局 */
+.card-inner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  padding: 16px 20px;
+  gap: 0;
+}
 
 .card-header {
-  padding: 16px 16px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  display: flex; flex-direction: column; gap: 8px;
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 10px;
+  border-bottom: none;
 }
-.title-row { display: flex; align-items: center; justify-content: space-between; }
-.title-right { display: flex; align-items: center; gap: 8px; }
+.title-row { display: flex; align-items: center; gap: 10px; }
+.title-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .project-title { font-size: 16px; font-weight: 600; color: #333; }
 .expand-icon {
-  font-size: 18px; color: #aaa; transition: transform 0.25s ease; line-height: 1;
+  display: flex;
+  align-items: center;
+  color: #bbb;
+  transition: transform 0.25s ease, color 0.25s ease;
+  flex-shrink: 0;
 }
-.expand-icon.open { transform: rotate(180deg); color: #4096ff; }
+.expand-icon.open { transform: rotate(90deg); color: #4096ff; }
 .project-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .project-tag { margin: 0; }
 
-.card-body { padding: 14px 16px; }
-.project-desc {
-  font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 12px;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+/* body 和 footer 横向并排 */
+.card-body {
+  grid-column: 1;
+  grid-row: 2;
+  padding: 10px 0 0;
 }
-.github-stats { display: flex; align-items: center; gap: 16px; font-size: 13px; color: #555; }
-.stat-item { display: flex; align-items: center; }
-.last-commit { color: #9ca3af; font-size: 12px; }
+.project-desc {
+  font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 0;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
 
+/* footer 竖向靠右 */
 .card-footer {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 16px; border-top: 1px solid #f0f0f0; background: #fafafa;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 0 0 28px;
+  border-top: none;
+  background: transparent;
+  min-width: 160px;
 }
 .author-info { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .author-name { color: #666; }
-.footer-right { display: flex; align-items: center; gap: 4px; }
+
+/* 右侧：stats 纵向 + 收藏按钮 */
+.footer-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.github-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 13px;
+  color: #555;
+}
+.stat-item { display: flex; align-items: center; justify-content: flex-end; }
+.last-commit { color: #9ca3af; font-size: 12px; }
 
 /* 展开详情区 */
 .card-detail {
   border-top: 1px solid #e8f0fe;
   background: #f8fbff;
-  padding: 20px;
+  padding: 20px 24px;
 }
 .detail-loading { display: flex; align-items: center; gap: 8px; color: #888; font-size: 13px; }
 

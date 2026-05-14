@@ -167,6 +167,11 @@ const FeedbackIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 18 18
   h('path', { d: 'M7 8h4M7 11h2', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round' })
 ]);
 
+const AuditIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 18 18', fill: 'none' }, [
+  h('path', { d: 'M5 2h8a1 1 0 011 1v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('path', { d: 'M7 6h4M7 9h4M7 12l1 1 3-3', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })
+]);
+
 const PlanIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 18 18', fill: 'none' }, [
   h('rect', { x: '2', y: '3', width: '14', height: '12', rx: '2', stroke: 'currentColor', 'stroke-width': '1.5' }),
   h('path', { d: 'M6 7h6M6 10h4M9 3v2', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round' }),
@@ -178,7 +183,7 @@ const menus = ref([
   { name: '电子书', path: '/list/book/1', match: [{ name: 'list-type-page', params: { type: 'book' } }], iconComponent: BookIcon },
   { name: '考试', path: '/paper/1', match: [{ name: 'paper-page' }], iconComponent: ExamIcon },
   { name: '答疑', path: '/question_answer/1', match: [{ name: 'question_answer-page' }], iconComponent: QAIcon },
-  { name: '秒杀', path: '/list/flashsale/1', match: [{ name: 'list-type-page', params: { type: 'flashsale' } }], iconComponent: FlashIcon },
+  { name: '秒杀', path: '/seckill', match: [{ name: 'seckill' }], iconComponent: FlashIcon },
   { name: '拼团', path: '/list/group/1', match: [{ name: 'list-type-page', params: { type: 'group' } }], iconComponent: GroupIcon },
   { name: '开源项目', path: '/openproject/list', match: [{ name: 'openproject-list' }], iconComponent: ProjectIcon },
   { name: '实用网站', path: '/usefull/list', match: [{ name: 'usefull-list' }], iconComponent: LinkIcon },
@@ -192,7 +197,8 @@ const menus = ref([
       { name: '内部网站', path: '/site' },
       { name: '内部资源', path: '/resource', match: [{ name: 'resource' }] }
     ]
-  }
+  },
+  { name: '审核', path: '/audit', match: [{ name: 'audit' }], iconComponent: AuditIcon }
 ]);
 
 onMounted(() => {
@@ -303,7 +309,7 @@ const handleSelect = (k)=>{
             break;
         case "center":
             navigateTo({
-                path:"/user/history/1"
+                name: "user-profile"
             })
             break;
     }
