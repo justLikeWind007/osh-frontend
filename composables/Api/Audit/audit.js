@@ -25,8 +25,8 @@ export async function apiGetPendingAuditResources(body) {
   });
 }
 
-export async function apiApproveAuditResource(body) {
-  return $fetch('/audit/approve', {
+export async function apiAuditResource(body) {
+  return $fetch('/audit/auditResource', {
     method: 'POST',
     baseURL,
     headers: getAuditAuthHeaders(),
