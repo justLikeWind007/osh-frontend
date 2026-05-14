@@ -114,9 +114,9 @@ export function useCollectApi(body) {
     })
 }
 
-// 修改资料
+// 修改资料（avatar、nickname、sex）
 export function useUpdateUserInfoApi(body) {
-    return useHttpPost("updateUserInfo", "/update_info", {
+    return useHttpPost("updateUserInfo", "/user/update_info", {
         body
     })
 }
@@ -136,9 +136,28 @@ export function useUploadConfig() {
 
 // 修改密码
 export function useupdatePasswordApi(body) {
-    return useHttpPost("updatePassword", "/update_password", {
+    return useHttpPost("updatePassword", "/user/update_password", {
         body
     })
+}
+
+// 改绑邮箱 - 提交请求（发送验证邮件）
+export function useChangeEmailSubmitApi(body) {
+    return useHttpPost("changeEmailSubmit", "/user/changeEmail/submit", {
+        body
+    })
+}
+
+// 改绑邮箱 - 验证 uniqueId
+export function useChangeEmailVerityApi(body) {
+    return useHttpPost("changeEmailVerity", "/user/changeEmail/verity", {
+        body
+    })
+}
+
+// 注销账号
+export function useDeleteUserApi() {
+    return useHttpPost("deleteUser", "/user/deleteUser")
 }
 
 // 领取优惠券
