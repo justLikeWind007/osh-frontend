@@ -54,10 +54,25 @@
           />
         </n-form-item>
 
+        <n-form-item label="反馈标签" path="tagIds">
+          <n-select
+            v-model:value="selectedTagKeys"
+            multiple
+            clearable
+            filterable
+            tag
+            max-tag-count="responsive"
+            :options="tagOptions"
+            :on-create="handleCreateTagOption"
+            placeholder="选择已有标签，或输入新标签后回车（最多 3 个）"
+            @update:value="handleTagSelect"
+          />
+        </n-form-item>
+
         <!-- 提交按钮 -->
         <n-form-item>
           <n-space>
-            <n-button type="primary" @click="handleSubmit" :loading="submitting">
+            <n-button type="primary" @click="handleSubmit" :loading="submitting || resolvingTags">
               提交反馈
             </n-button>
             <n-button @click="handleSaveDraft">
@@ -77,12 +92,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { NForm, NFormItem, NInput, NButton, NSpace, NBreadcrumb, NBreadcrumbItem, NSelect } from 'naive-ui'
 import {
   apiGetFeedbackCategories,
+  apiGetFeedbackTags,
+  apiCreateFeedbackTag,
   apiCreateFeedback,
   assertAssistantResponseSuccess,
   resolveFeedbackCategoryIcon,
@@ -92,20 +109,30 @@ import { useHasAuth } from '~/composables/useAuth'
 
 const router = useRouter()
 const message = useMessage()
+const MAX_FEEDBACK_TAG_COUNT = 3
 
 const categories = ref([])
+const tags = ref([])
 const formRef = ref(null)
 const submitting = ref(false)
+const resolvingTags = ref(false)
+const selectedTagKeys = ref([])
 const form = ref({
   categoryId: null,
   title: '',
   content: '',
-  pagePath: ''
+  pagePath: '',
+  tagIds: []
 })
 
 const categorySelectOptions = computed(() => categories.value.map(category => ({
   label: `${resolveFeedbackCategoryIcon(category)} ${category.name}`,
   value: category.id,
+})))
+
+const tagOptions = computed(() => tags.value.map(tag => ({
+  label: tag.name,
+  value: buildExistingTagKey(tag.id),
 })))
 
 const currentCategoryDescription = computed(() => categories.value
@@ -136,6 +163,7 @@ const rules = {
 onMounted(async () => {
   useHasAuth()
   await loadCategories()
+  await loadTags()
   loadDraft()
   
   // 自动填充页面路径
@@ -154,6 +182,16 @@ async function loadCategories() {
   }
 }
 
+async function loadTags() {
+  try {
+    const res = await apiGetFeedbackTags()
+    tags.value = res.data || []
+  } catch (error) {
+    message.error(resolveFeedbackErrorMessage(error, '加载标签失败'))
+    console.error('加载标签失败:', error)
+  }
+}
+
 function loadDraft() {
   if (process.client) {
     const userId = localStorage.getItem('userId') || 'guest'
@@ -162,6 +200,9 @@ function loadDraft() {
       try {
         const draftData = JSON.parse(draft)
         form.value = { ...form.value, ...draftData }
+        const draftTagIds = Array.isArray(form.value.tagIds) ? form.value.tagIds : []
+        selectedTagKeys.value = normalizeSelectedTags(draftTagIds.map(buildExistingTagKey), false)
+        syncFormTagIdsFromSelectedKeys()
         message.info('已加载草稿')
       } catch (error) {
         console.error('加载草稿失败:', error)
@@ -186,14 +227,17 @@ async function handleSubmit() {
     }
 
     await formRef.value?.validate()
+    await resolvePendingTagNamesFromForm()
     submitting.value = true
+    syncFormTagIdsFromSelectedKeys()
 
     const createdFeedback = assertAssistantResponseSuccess(
       await apiCreateFeedback({
         categoryId: form.value.categoryId,
         title: form.value.title.trim(),
         content: form.value.content.trim(),
-        pagePath: form.value.pagePath
+        pagePath: form.value.pagePath,
+        tagIds: form.value.tagIds
       }),
       '提交反馈失败'
     )
@@ -210,7 +254,7 @@ async function handleSubmit() {
       await router.push(`/feedback/detail/${createdFeedback.id}?created=1`)
       return
     }
-    await router.push('/feedback/my')
+    await router.push('/feedback/list?mode=mine')
   } catch (error) {
     if (Array.isArray(error)) {
       return
@@ -224,17 +268,172 @@ async function handleSubmit() {
 
 function handleReset() {
   formRef.value?.restoreValidation()
+  selectedTagKeys.value = []
   form.value = {
     categoryId: null,
     title: '',
     content: '',
-    pagePath: form.value.pagePath
+    pagePath: form.value.pagePath,
+    tagIds: []
   }
 }
 
 function handleCategorySelect(categoryId) {
   form.value.categoryId = categoryId
   formRef.value?.restoreValidation()
+}
+
+function handleTagSelect(tagKeys) {
+  selectedTagKeys.value = normalizeSelectedTags(tagKeys, true)
+  syncFormTagIdsFromSelectedKeys()
+}
+
+function handleCreateTagOption(inputValue) {
+  const tagName = inputValue.trim()
+  if (!tagName) {
+    return false
+  }
+  if (selectedTagKeys.value.length >= MAX_FEEDBACK_TAG_COUNT) {
+    message.warning(`反馈最多选择 ${MAX_FEEDBACK_TAG_COUNT} 个标签`)
+    return false
+  }
+  const existingTag = tags.value.find(tag => tag.name === tagName)
+  if (existingTag) {
+    return {
+      label: existingTag.name,
+      value: buildExistingTagKey(existingTag.id),
+    }
+  }
+  return {
+    label: tagName,
+    value: buildPendingTagKey(tagName),
+  }
+}
+
+function normalizeSelectedTags(tagKeys, showWarning) {
+  const selectedTagKeys = Array.isArray(tagKeys) ? tagKeys : []
+  if (selectedTagKeys.length <= MAX_FEEDBACK_TAG_COUNT) {
+    return selectedTagKeys
+  }
+  if (showWarning) {
+    message.warning(`反馈最多选择 ${MAX_FEEDBACK_TAG_COUNT} 个标签`)
+  }
+  return selectedTagKeys.slice(0, MAX_FEEDBACK_TAG_COUNT)
+}
+
+watch(
+  () => selectedTagKeys.value,
+  async (tagKeys) => {
+    const pendingTagNames = tagKeys
+      .filter(isPendingTagKey)
+      .map(parsePendingTagName)
+      .filter(Boolean)
+    if (pendingTagNames.length === 0) {
+      return
+    }
+    try {
+      await resolvePendingTagNames(pendingTagNames)
+    } catch (error) {
+      message.error(resolveFeedbackErrorMessage(error, '创建标签失败'))
+      selectedTagKeys.value = selectedTagKeys.value.filter(tagKey => !isPendingTagKey(tagKey))
+      syncFormTagIdsFromSelectedKeys()
+    }
+  }
+)
+
+async function resolvePendingTagNames(tagNames) {
+  resolvingTags.value = true
+  const uniqueTagNames = [...new Set(tagNames)]
+  try {
+    const createdTags = await Promise.all(uniqueTagNames.map(createOrGetTagByName))
+    const tagIdMap = createdTags.reduce((result, tag) => {
+      result[tag.name] = tag.id
+      return result
+    }, {})
+    tags.value = mergeFeedbackTags(tags.value, createdTags)
+    selectedTagKeys.value = normalizeSelectedTags(selectedTagKeys.value.map(tagKey => {
+      if (!isPendingTagKey(tagKey)) {
+        return tagKey
+      }
+      return buildExistingTagKey(tagIdMap[parsePendingTagName(tagKey)])
+    }).filter(Boolean), false)
+    syncFormTagIdsFromSelectedKeys()
+  } finally {
+    resolvingTags.value = false
+  }
+}
+
+async function createOrGetTagByName(tagName) {
+  const existingTag = tags.value.find(tag => tag.name === tagName)
+  if (existingTag) {
+    return existingTag
+  }
+  const response = await apiCreateFeedbackTag({ name: tagName })
+  return assertAssistantResponseSuccess(response, '创建标签失败')
+}
+
+function mergeFeedbackTags(currentTags, nextTags) {
+  const tagMap = [...currentTags, ...nextTags].reduce((result, tag) => {
+    result[tag.id] = tag
+    return result
+  }, {})
+  return Object.values(tagMap)
+}
+
+async function resolvePendingTagNamesFromForm() {
+  const pendingTagNames = selectedTagKeys.value
+    .filter(isPendingTagKey)
+    .map(parsePendingTagName)
+    .filter(Boolean)
+  if (resolvingTags.value) {
+    await waitForTagResolving()
+  }
+  if (pendingTagNames.length === 0 || resolvingTags.value) {
+    return
+  }
+  await resolvePendingTagNames(pendingTagNames)
+}
+
+function waitForTagResolving() {
+  return new Promise(resolve => {
+    const timer = setInterval(() => {
+      if (!resolvingTags.value) {
+        clearInterval(timer)
+        resolve()
+      }
+    }, 50)
+  })
+}
+
+function syncFormTagIdsFromSelectedKeys() {
+  form.value.tagIds = selectedTagKeys.value
+    .filter(isExistingTagKey)
+    .map(parseExistingTagId)
+    .filter(tagId => Number.isFinite(tagId))
+}
+
+function buildExistingTagKey(tagId) {
+  return `id:${tagId}`
+}
+
+function buildPendingTagKey(tagName) {
+  return `name:${tagName}`
+}
+
+function isExistingTagKey(tagKey) {
+  return typeof tagKey === 'string' && tagKey.startsWith('id:')
+}
+
+function isPendingTagKey(tagKey) {
+  return typeof tagKey === 'string' && tagKey.startsWith('name:')
+}
+
+function parseExistingTagId(tagKey) {
+  return Number(tagKey.replace('id:', ''))
+}
+
+function parsePendingTagName(tagKey) {
+  return tagKey.replace('name:', '').trim()
 }
 </script>
 

@@ -11,6 +11,8 @@
 export const useNotifications = () => useState('ws_notifications', () => [])
 export const useUnreadCount   = () => useState('ws_unread', () => 0)
 export const useWsStatus      = () => useState('ws_status', () => 'disconnected')
+/** 开源项目广播公告列表（type=NEW_OPEN_PROJECT） */
+export const useProjectAnnouncements = () => useState('ws_project_announcements', () => [])
 
 // ─── WebSocket 单例（非响应式）────────────────────────────────────────────────
 let _ws = null
@@ -41,6 +43,7 @@ export function useWebSocket() {
   const notifications = useNotifications()
   const unreadCount   = useUnreadCount()
   const wsStatus      = useWsStatus()
+  const projectAnnouncements = useProjectAnnouncements()
 
   function connect() {
     if (!process.client) return
@@ -80,6 +83,14 @@ export function useWebSocket() {
         notifications.value.unshift(msg)
         if (notifications.value.length > 50) notifications.value = notifications.value.slice(0, 50)
         unreadCount.value++
+
+        // 开源项目广播：额外写入公告列表
+        if (msg.type === 'NEW_OPEN_PROJECT') {
+          projectAnnouncements.value.unshift(msg)
+          if (projectAnnouncements.value.length > 10) {
+            projectAnnouncements.value = projectAnnouncements.value.slice(0, 10)
+          }
+        }
       } catch (e) {
         console.error('[WS] 消息解析失败', e)
       }
@@ -130,7 +141,7 @@ export function useWebSocket() {
     unreadCount.value = 0
   }
 
-  return { notifications, unreadCount, wsStatus, connect, disconnect, markAllRead, markRead, clearAll }
+  return { notifications, unreadCount, wsStatus, connect, disconnect, markAllRead, markRead, clearAll, projectAnnouncements }
 }
 
 // ─── 心跳 ─────────────────────────────────────────────────────────────────────

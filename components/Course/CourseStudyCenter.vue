@@ -55,12 +55,7 @@
           </div>
         </div>
 
-        <!-- 文档展示区（有内容时直接展开，无需点击） -->
-        <div v-if="renderedDocContent" class="doc-panel-wrap">
-          <div ref="docPanelRef" class="doc-panel-content" v-html="renderedDocContent" />
-        </div>
-
-        <!-- 提问区（折叠式，在视频下方） -->
+        <!-- 提问区（折叠式，在文章上方；展开后避免长文档导致用户大量滚动） -->
         <Transition name="qa-slide">
           <div v-if="showQaPanel && currentSection.id" class="qa-panel-wrap">
             <ClientOnly>
@@ -72,6 +67,11 @@
             </ClientOnly>
           </div>
         </Transition>
+
+        <!-- 文档展示区（有内容时直接展开，无需点击） -->
+        <div v-if="renderedDocContent" class="doc-panel-wrap">
+          <div ref="docPanelRef" class="doc-panel-content" v-html="renderedDocContent" />
+        </div>
       </div>
 
       <!-- 右侧：章节目录 + 资料 -->
@@ -604,10 +604,12 @@ onMounted(loadOutline);
 .doc-slide-enter-to, .doc-slide-leave-from { opacity: 1; max-height: 480px; }
 
 /* 问题面板包裹 */
+/* 提问区现在位于文章上方，去掉原来用于"页面底部留白"的 20px 下内边距，
+   让下方的 .doc-panel-wrap 通过自身 18px 上外边距维持一致的视觉间距。 */
 .qa-panel-wrap {
   width: min(100%, 1340px);
   margin: 18px auto 0;
-  padding: 0 0 20px;
+  padding: 0;
   background: transparent;
   box-sizing: border-box;
 }

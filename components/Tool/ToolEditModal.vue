@@ -14,11 +14,10 @@
           <n-input v-model:value="formValue.toolName" placeholder="请输入工具名称，如图片转PDF" />
         </n-form-item>
 
-        <n-form-item label="访问类型">
-          <n-select
-            v-model:value="formValue.accessType"
-            :options="accessTypeOptions"
-            placeholder="请选择访问类型"
+        <n-form-item label="前端路由">
+          <n-input
+            v-model:value="formValue.routePath"
+            placeholder="请输入站内工具路由，如 /tool/image-to-pdf"
           />
         </n-form-item>
       </div>
@@ -33,21 +32,21 @@
       </n-form-item>
 
       <div class="form-grid">
-        <n-form-item :label="formValue.accessType === 2 ? 'iframe地址' : '前端路由'">
-          <n-input
-            v-if="formValue.accessType === 2"
-            v-model:value="formValue.iframeUrl"
-            placeholder="请输入第三方 iframe 地址"
-          />
-          <n-input
-            v-else
-            v-model:value="formValue.routePath"
-            placeholder="请输入站内工具路由，如 /tool/image-to-pdf"
-          />
-        </n-form-item>
-
         <n-form-item label="GitHub">
           <n-input v-model:value="formValue.githubUrl" placeholder="可选，GitHub 地址" />
+        </n-form-item>
+
+        <n-form-item label="工具标签">
+          <n-select
+            v-model:value="formValue.tags"
+            multiple
+            filterable
+            tag
+            :max-tag-count="3"
+            placeholder="选择已有标签或输入新标签后回车"
+            :options="tagOptions"
+            @update:value="handleTagsChange"
+          />
         </n-form-item>
       </div>
 
@@ -62,25 +61,6 @@
 
         <n-form-item label="资源等级">
           <n-input-number v-model:value="formValue.level" :min="1" :max="99" style="width: 100%" />
-        </n-form-item>
-      </div>
-
-      <div class="form-grid">
-        <n-form-item label="积分消耗">
-          <n-input-number v-model:value="formValue.pointCost" :min="0" style="width: 100%" />
-        </n-form-item>
-
-        <n-form-item label="工具标签">
-          <n-select
-            v-model:value="formValue.tags"
-            multiple
-            filterable
-            tag
-            :max-tag-count="3"
-            placeholder="选择已有标签或输入新标签后回车"
-            :options="tagOptions"
-            @update:value="handleTagsChange"
-          />
         </n-form-item>
       </div>
 
@@ -99,9 +79,6 @@
             <n-input-number v-model:value="item.price" :min="0" placeholder="现金">
               <template #prefix>￥</template>
             </n-input-number>
-            <div class="point-preview">
-              {{ calcPointCost(item.price) }} 积分
-            </div>
             <n-input-number v-model:value="item.sortOrder" placeholder="排序" />
             <n-button tertiary type="error" @click="removePackage(index)">删除</n-button>
           </div>
@@ -143,11 +120,8 @@ const formValue = reactive({
   id: null,
   toolName: '',
   description: '',
-  accessType: 1,
   routePath: '',
-  iframeUrl: '',
   githubUrl: '',
-  pointCost: 0,
   status: 1,
   remark: '',
   resourceType: 'FREE',
@@ -160,15 +134,9 @@ const isEdit = computed(() => !!props.editData?.id);
 const modalTitle = computed(() => isEdit.value ? '修改工具' : '新增工具');
 const submitText = computed(() => isEdit.value ? '保存修改' : '保存并发布');
 
-const accessTypeOptions = [
-  { label: '站内工具', value: 1 },
-  { label: 'iframe第三方工具', value: 2 },
-];
-
 const resourceTypeOptions = [
   { label: '免费', value: 'FREE' },
-  { label: '仅现金', value: 'CASH_ONLY' },
-  { label: '现金&积分', value: 'CASH_POINT' },
+  { label: '付费套餐', value: 'CASH_ONLY' },
   { label: 'VIP免费', value: 'VIP' },
   { label: '小班免费', value: 'SMALL_CLASS' },
   { label: '内部免费', value: 'INTERNAL' },
@@ -191,11 +159,8 @@ function resetForm() {
   formValue.id = source.id || null;
   formValue.toolName = source.toolName || '';
   formValue.description = source.description || '';
-  formValue.accessType = Number(source.accessType || source.access_type || 1);
   formValue.routePath = source.routePath || source.route_path || '';
-  formValue.iframeUrl = source.iframeUrl || source.iframe_url || '';
   formValue.githubUrl = source.githubUrl || source.github_url || '';
-  formValue.pointCost = Number(source.pointCost || source.point_cost || 0);
   formValue.status = source.status ?? 1;
   formValue.remark = source.remark || '';
   formValue.resourceType = source.resourceType || source.resource_type || 'FREE';
@@ -210,8 +175,6 @@ function createEmptyPackage() {
     id: null,
     useCount: 10,
     price: 0,
-    pointCost: 0,
-    payType: 1,
     status: 1,
     sortOrder: 0,
   };
@@ -226,8 +189,6 @@ function normalizePackages(packages) {
     id: item.id || null,
     useCount: Number(item.useCount || item.use_count || 1),
     price: Number(item.price || 0),
-    pointCost: Number(item.pointCost || item.point_cost || 0),
-    payType: Number(item.payType || item.pay_type || 1),
     status: item.status ?? 1,
     sortOrder: Number(item.sortOrder || item.sort_order || 0),
   }));
@@ -239,10 +200,6 @@ function addPackage() {
 
 function removePackage(index) {
   formValue.packages.splice(index, 1);
-}
-
-function calcPointCost(price) {
-  return Math.round(Number(price || 0) * 10);
 }
 
 function handleTagsChange(value) {
@@ -257,12 +214,8 @@ async function handleSubmit() {
     message.error('请输入工具名称');
     return;
   }
-  if (formValue.accessType === 1 && !formValue.routePath?.trim()) {
+  if (!formValue.routePath?.trim()) {
     message.error('请输入站内工具前端路由');
-    return;
-  }
-  if (formValue.accessType === 2 && !formValue.iframeUrl?.trim()) {
-    message.error('请输入第三方 iframe 地址');
     return;
   }
   if (formValue.tags.length > MAX_TAG_COUNT) {
@@ -288,13 +241,8 @@ async function handleSubmit() {
       toolName: formValue.toolName,
       description: formValue.description,
       logoUrl: null,
-      accessType: formValue.accessType,
-      routePath: formValue.accessType === 1 ? formValue.routePath : null,
-      iframeUrl: formValue.accessType === 2 ? formValue.iframeUrl : null,
+      routePath: formValue.routePath,
       githubUrl: formValue.githubUrl,
-      price: 0,
-      originalPrice: 0,
-      pointCost: formValue.pointCost,
       status: formValue.status,
       remark: formValue.remark,
       resourceType: formValue.resourceType,
@@ -304,8 +252,6 @@ async function handleSubmit() {
         packageName: `${item.useCount}次使用套餐`,
         useCount: item.useCount,
         price: item.price || 0,
-        pointCost: calcPointCost(item.price),
-        payType: formValue.resourceType === 'CASH_POINT' ? 3 : 1,
         status: item.status ?? 1,
         sortOrder: item.sortOrder || 0,
       })),
@@ -346,20 +292,9 @@ async function handleSubmit() {
 }
 .package-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(130px, 1fr) minmax(110px, 0.9fr) minmax(90px, 0.8fr) auto;
+  grid-template-columns: minmax(120px, 1fr) minmax(130px, 1fr) minmax(90px, 0.8fr) auto;
   gap: 8px;
   align-items: center;
-}
-.point-preview {
-  min-height: 34px;
-  border: 1px solid #e5e7eb;
-  border-radius: 3px;
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  color: #7c3aed;
-  background: #fafafa;
-  font-weight: 700;
 }
 @media (max-width: 780px) {
   .form-grid {

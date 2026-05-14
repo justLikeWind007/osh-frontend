@@ -87,12 +87,12 @@ const calculate = () => {
     '*': left * right,
     '/': left / right,
   };
-  result.value = operationMap[operator.value];
-  calculating.value = true;
   emit('used');
   window.setTimeout(() => {
     calculating.value = false;
   }, 800);
+  result.value = operationMap[operator.value];
+  calculating.value = true;
 };
 
 const resetCalculator = () => {

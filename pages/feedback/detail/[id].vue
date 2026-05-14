@@ -44,6 +44,10 @@
 
         <h1 class="detail-title">{{ detail.title }}</h1>
 
+        <div v-if="detail.tags?.length" class="tag-row">
+          <span v-for="tag in detail.tags" :key="tag.id" class="feedback-tag">{{ tag.name }}</span>
+        </div>
+
         <div class="detail-meta">
           <span class="meta-item">
             <span class="icon">👤</span>
@@ -978,6 +982,24 @@ function formatAbsoluteTime(time) {
   line-height: 1.4;
 }
 
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.feedback-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  line-height: 1;
+}
+
 .detail-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1275,7 +1297,7 @@ function formatAbsoluteTime(time) {
   .page-wrapper {
     padding: 16px 12px;
   }
-  
+
   .detail-card,
   .comment-section {
     padding: 20px 16px;

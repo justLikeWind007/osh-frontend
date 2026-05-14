@@ -72,11 +72,11 @@
             </span>
             <span v-if="question.resourceNo" class="meta-resource">
               <span class="resource-icon">📚</span>
-              [{{ question.resourceType || '课程' }}] #{{ question.resourceNo }}
+              [{{ displayResourceType(question.resourceType) || '课程' }}] #{{ question.resourceNo }}
             </span>
             <span v-else-if="question.resourceType" class="meta-resource">
               <span class="resource-icon">📚</span>
-              {{ question.resourceType }}
+              {{ displayResourceType(question.resourceType) }}
             </span>
             <span class="meta-time">
               <span class="time-icon">🕐</span>
@@ -369,11 +369,29 @@ const editForm = reactive({
 // 删除确认弹窗
 const deleteModalVisible = ref(false);
 
+// 与后端 ResourceTypeEnum 对齐：course / website / 电子书。
+// 注意：
+// 1. 课程统一传英文 code 'course'，后端有 'course' ↔ '课程' 的兼容查询。
+// 2. 网站统一传英文 code 'website'，需后端 ResourceTypeEnum 已包含 WEBSITE。
+// 3. 电子书目前在 book.js 仍以 '电子书' 入库，这里保持 '电子书'，避免编辑/筛选时与已存数据不匹配。
 const resourceTypeOptions = [
-  { label: '课程', value: '课程' },
-  { label: '网站', value: '网站' },
+  { label: '课程', value: 'course' },
+  { label: '网站', value: 'website' },
   { label: '电子书', value: '电子书' },
 ];
+
+// 资源类型展示映射：后端历史数据可能存的是 '课程/网站/电子书'，
+// 也可能是新格式 'course/website/book'，统一渲染成中文 label。
+const RESOURCE_TYPE_LABEL_MAP = {
+  course: '课程',
+  website: '网站',
+  book: '电子书',
+};
+
+function displayResourceType(type) {
+  if (!type) return '';
+  return RESOURCE_TYPE_LABEL_MAP[type] || type;
+}
 
 // 用户信息（与 useAuth.js 保持一致，用 useState + useCookie）
 const userState = useUser();
@@ -539,12 +557,27 @@ async function submitAnswer() {
   }
 }
 
+// 旧数据可能用中文存储（'课程' / '网站'），新版下拉 value 已经统一成英文 code
+// （'course' / 'website'），这里把旧值映射到下拉的合法 value，保证编辑时下拉能正常选中。
+// 电子书保持中文 '电子书'（与 BOOK_RESOURCE_TYPE / 下拉 value 一致），无需映射。
+// 'book'（如未来 BOOK_RESOURCE_TYPE 改成英文）也归一为下拉的 '电子书'。
+const RESOURCE_TYPE_LEGACY_MAP = {
+  课程: 'course',
+  网站: 'website',
+  book: '电子书',
+};
+
+function normalizeEditResourceType(type) {
+  if (!type) return null;
+  return RESOURCE_TYPE_LEGACY_MAP[type] || type;
+}
+
 // ===== 编辑问题 =====
 function openEditModal() {
   const q = question.value;
   editForm.content = q.content || '';
   editForm.isPaidOnly = String(q.isPaidOnly ?? '0');
-  editForm.resourceType = q.resourceType || null;
+  editForm.resourceType = normalizeEditResourceType(q.resourceType);
   editForm.resourceNo = q.resourceNo || null;
   editForm.tags = Array.isArray(q.tags) ? [...q.tags] : [];
   editNewTag.value = '';

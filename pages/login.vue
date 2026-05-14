@@ -206,6 +206,10 @@ const onSubmit = () => {
             if (process.client && result.role) {
               localStorage.setItem('__user_role__', JSON.stringify(result.role))
             }
+            // 持久化 asset（金币、积分），刷新后不丢失
+            if (process.client && result.asset) {
+              localStorage.setItem('__user_asset__', JSON.stringify(result.asset))
+            }
 
             // 如果有 from 参数，跳转到该页面
             // 例：/login?from=/user → 跳转到 /user

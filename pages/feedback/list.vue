@@ -15,13 +15,25 @@
         <h1 class="page-title">📋 反馈列表</h1>
       </div>
       <n-space>
-        <n-button @click="goToMyFeedback">我的反馈</n-button>
         <n-button type="primary" @click="goToCreate">提交反馈</n-button>
       </n-space>
     </div>
 
+    <div class="view-mode-box">
+      <n-space>
+        <n-button
+          v-for="option in queryModeOptions"
+          :key="option.value"
+          :type="queryMode === option.value ? 'primary' : 'default'"
+          @click="selectQueryMode(option.value)"
+        >
+          {{ option.label }}
+        </n-button>
+      </n-space>
+    </div>
+
     <!-- 公告区 -->
-    <div v-if="announcements.length > 0" class="announcement-section">
+    <div v-if="showAnnouncements && announcements.length > 0" class="announcement-section">
       <div class="announcement-header">
         <span class="icon">📢</span>
         <span class="title">系统公告</span>
@@ -61,6 +73,17 @@
       </div>
       <div class="filter-row">
         <div class="filter-row-content">
+          <n-select
+            v-model:value="selectedTagIds"
+            multiple
+            clearable
+            filterable
+            max-tag-count="responsive"
+            :options="tagOptions"
+            placeholder="按标签筛选"
+            style="width: 220px; margin-right: 12px;"
+            @update:value="handleTagChange"
+          />
           <n-select
             v-model:value="selectedStatus"
             :options="statusOptions"
@@ -114,6 +137,9 @@
             </span>
           </div>
           <h3 class="card-title">{{ item.title }}</h3>
+          <div v-if="item.tags?.length" class="tag-row">
+            <span v-for="tag in item.tags" :key="tag.id" class="feedback-tag">{{ tag.name }}</span>
+          </div>
           <p class="card-content">{{ item.contentPreview || '' }}{{ item.contentPreview ? '...' : '' }}</p>
           <div class="card-footer">
             <span class="user">👤 {{ getFeedbackUserName(item) }}</span>
@@ -130,7 +156,7 @@
     <div class="feedback-section">
       <div class="section-header">
         <span class="icon">📋</span>
-        <span class="title">全部反馈</span>
+        <span class="title">{{ currentSectionTitle }}</span>
       </div>
       <div v-if="loading" class="loading-box">
         <div class="feedback-skeleton-list">
@@ -143,8 +169,8 @@
           </div>
         </div>
       </div>
-      <div v-else-if="feedbackList.length === 0" class="empty-box">
-        <n-empty description="暂无反馈" />
+      <div v-else-if="feedbackList.length === 0 && pinnedList.length === 0" class="empty-box">
+        <n-empty :description="emptyDescription" />
       </div>
       <div v-else class="feedback-list">
         <div
@@ -161,6 +187,9 @@
             </span>
           </div>
           <h3 class="card-title">{{ item.title }}</h3>
+          <div v-if="item.tags?.length" class="tag-row">
+            <span v-for="tag in item.tags" :key="tag.id" class="feedback-tag">{{ tag.name }}</span>
+          </div>
           <p class="card-content">{{ item.contentPreview || '' }}{{ item.contentPreview ? '...' : '' }}</p>
           <div class="card-footer">
             <span class="user">👤 {{ getFeedbackUserName(item) }}</span>
@@ -189,6 +218,7 @@ import { useMessage } from 'naive-ui'
 import { NButton, NInput, NSpace, NBreadcrumb, NBreadcrumbItem, NSpin, NEmpty, NSelect } from 'naive-ui'
 import { 
   apiGetFeedbackCategories, 
+  apiGetFeedbackTags,
   apiPageFeedback,
   resolveFeedbackCategoryIcon,
   resolveFeedbackStatusText,
@@ -200,10 +230,13 @@ const router = useRouter()
 const message = useMessage()
 
 const categories = ref([])
+const feedbackTags = ref([])
 const announcements = ref([])
 const pinnedList = ref([])
 const feedbackList = ref([])
+const queryMode = ref('all')
 const selectedCategoryId = ref(null)
+const selectedTagIds = ref([])
 const selectedStatus = ref(null)
 const keyword = ref('')
 const sortType = ref('hot') // 默认按最热排序
@@ -223,25 +256,55 @@ const sortOptions = [
   { label: '🆕 最新', value: 'latest' },
   { label: '💬 最多评论', value: 'comment' }
 ]
+const queryModeOptions = [
+  { label: '全部反馈', value: 'all' },
+  { label: '我的反馈', value: 'mine' },
+  { label: '我的收藏', value: 'favorite' }
+]
 const statusOptions = [
   { label: '待处理', value: 'PENDING' },
   { label: '处理中', value: 'PROCESSING' },
   { label: '已解决', value: 'RESOLVED' },
   { label: '已关闭', value: 'CLOSED' }
 ]
-
+const tagOptions = computed(() => feedbackTags.value.map(tag => ({
+  label: tag.name,
+  value: tag.id
+})))
+const showAnnouncements = computed(() => queryMode.value === 'all')
+const currentSectionTitle = computed(() => {
+  if (queryMode.value === 'mine') {
+    return '我的反馈'
+  }
+  if (queryMode.value === 'favorite') {
+    return '我的收藏'
+  }
+  return '全部反馈'
+})
+const emptyDescription = computed(() => {
+  if (queryMode.value === 'mine') {
+    return '暂无我的反馈'
+  }
+  if (queryMode.value === 'favorite') {
+    return '暂无收藏反馈'
+  }
+  return '暂无反馈'
+})
 const hasMore = computed(() => (feedbackList.value.length + pinnedList.value.length) < total.value)
 
 onMounted(() => {
   if (process.client) {
     window.addEventListener('scroll', handleWindowScroll, { passive: true })
   }
+  syncQueryModeFromRoute()
   loadCategories()
+  loadTags()
   loadAnnouncements()
   loadFeedback()
 })
 
 onActivated(() => {
+  syncQueryModeFromRoute()
   applyPatchedFeedbackList()
 })
 
@@ -265,6 +328,16 @@ async function loadCategories() {
   } catch (error) {
     message.error(resolveFeedbackErrorMessage(error, '加载分类失败'))
     console.error('加载分类失败:', error)
+  }
+}
+
+async function loadTags() {
+  try {
+    const res = await apiGetFeedbackTags()
+    feedbackTags.value = res.data || []
+  } catch (error) {
+    message.error(resolveFeedbackErrorMessage(error, '加载标签失败'))
+    console.error('加载标签失败:', error)
   }
 }
 
@@ -301,12 +374,33 @@ function getFeedbackUserName(item) {
   return item?.userName || `用户${item?.userId || ''}`
 }
 
+function syncQueryModeFromRoute() {
+  const mode = router.currentRoute.value.query?.mode
+  queryMode.value = queryModeOptions.some(option => option.value === mode) ? mode : 'all'
+}
+
+function selectQueryMode(mode) {
+  if (queryMode.value === mode) {
+    return
+  }
+  queryMode.value = mode
+  router.replace({
+    path: '/feedback/list',
+    query: mode === 'all' ? {} : { mode }
+  })
+  loadFeedback()
+}
+
 function selectCategory(categoryId) {
   selectedCategoryId.value = categoryId
   loadFeedback()
 }
 
 function handleStatusChange() {
+  loadFeedback()
+}
+
+function handleTagChange() {
   loadFeedback()
 }
 
@@ -351,10 +445,6 @@ function goToCreate() {
   router.push('/feedback/create')
 }
 
-function goToMyFeedback() {
-  router.push('/feedback/my')
-}
-
 function handleWindowScroll() {
   if (!process.client || hasUserScrolled.value) {
     return
@@ -380,7 +470,9 @@ function formatTime(time) {
 
 async function fetchFeedbackPage(nextPageNum) {
   const res = await apiPageFeedback({
+    queryMode: queryMode.value,
     categoryId: selectedCategoryId.value,
+    tagIds: selectedTagIds.value,
     status: selectedStatus.value,
     keyword: keyword.value,
     isAnnouncement: 0,
@@ -459,6 +551,10 @@ function destroyLoadMoreObserver() {
 
 .header-main {
   min-width: 0;
+}
+
+.view-mode-box {
+  margin-bottom: 20px;
 }
 
 .feedback-skeleton-list {
@@ -739,6 +835,24 @@ function destroyLoadMoreObserver() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px 0;
+}
+
+.feedback-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .card-content {

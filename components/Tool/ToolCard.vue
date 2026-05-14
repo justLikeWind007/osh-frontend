@@ -59,7 +59,7 @@ const toolInitial = computed(() => (props.item.toolName || '工').slice(0, 1));
 const resourceTypeMap = {
   FREE: '免费',
   CASH_ONLY: '付费',
-  CASH_POINT: '现金+积分',
+  CASH_POINT: '付费',
   VIP: 'VIP',
   SMALL_CLASS: '小班',
   INTERNAL: '内部',
