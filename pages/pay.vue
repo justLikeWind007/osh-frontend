@@ -20,7 +20,7 @@
                     <Price :value="data.price"/>
                 </h5>
                 <!-- 二维码组件 -->
-                <QrCode :data="data.code_url" v-if="data.code_url"/>
+                <QrCode :data="data.qrcode" v-if="data.qrcode"/>
                 <div class="flex justify-center items-center py-4 text-green-500 scan-instructions">
                     <n-icon :size="35">
                         <ScanCircleOutline/>

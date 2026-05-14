@@ -10,49 +10,44 @@
     </div>
 
     <!-- 封面 -->
-    <div class="card-cover" :class="item.goods_type === 'book' ? 'cover-book' : 'cover-course'">
-      <img :src="item.cover || '/default-cover.jpg'" :alt="item.title" />
-      <div class="quota-badge" v-if="item.quota > 0">🔥 限量{{ item.quota }}名</div>
+    <div class="card-cover" :class="item.goodsType === 2 ? 'cover-book' : 'cover-course'">
+      <img :src="item.cover || '/default-cover.jpg'" :alt="item.title" loading="lazy" />
+      <div class="quota-badge" v-if="item.totalStock > 0">🔥 限量{{ item.totalStock }}名</div>
+      <div class="quota-badge unlimited" v-else>∞ 不限量</div>
+      <!-- 售罄遮罩 -->
+      <div class="soldout-mask" v-if="btnState === 'soldout'">
+        <span class="soldout-text">已售罄</span>
+      </div>
     </div>
 
     <!-- 内容区 -->
     <div class="card-body">
       <h4 class="card-title">{{ item.title }}</h4>
 
-      <div class="card-meta" v-if="item.goods_type !== 'book'">
-        <span>⭐ {{ item.teacher_name || '未知讲师' }}</span>
+      <!-- 类型标签 -->
+      <div class="card-meta">
+        <span class="type-tag" :class="`type-${item.goodsType}`">
+          {{ item.goodsType === 1 ? '课程' : item.goodsType === 2 ? '电子书' : '商品' }}
+        </span>
         <span class="meta-divider">|</span>
-        <span>{{ item.student_count || 0 }}人已学</span>
-      </div>
-      <div class="card-meta" v-else>
-        <span>✍️ {{ item.author || '未知作者' }}</span>
-        <span class="meta-divider">|</span>
-        <span>{{ item.format || 'PDF' }}</span>
-      </div>
-
-      <div class="card-info">
-        <template v-if="item.goods_type === 'course'">
-          📚 {{ item.lesson_count || 0 }}课时
-          <span class="info-divider">|</span>
-          {{ item.valid_days > 0 ? item.valid_days + '天' : '永久有效' }}
-        </template>
-        <template v-else-if="item.goods_type === 'book'">
-          📖 {{ item.page_count || 0 }}页 <span class="info-divider">|</span> {{ item.format || 'PDF' }}
-        </template>
-        <template v-else-if="item.goods_type === 'exam'">
-          📝 {{ item.question_count || 0 }}题 <span class="info-divider">|</span> 通过率{{ item.pass_rate || 0 }}%
-        </template>
+        <span>限购 {{ item.limitPerUser > 0 ? item.limitPerUser + '件' : '不限' }}</span>
       </div>
 
       <div class="card-divider" />
 
+      <!-- 价格区 -->
       <div class="card-price">
-        <span class="price-original">¥{{ item.original_price }}</span>
-        <span class="price-seckill">秒杀价 ¥{{ item.seckill_price }}</span>
+        <span class="price-original">¥{{ item.originPrice }}</span>
+        <span class="price-seckill">秒杀价 ¥{{ item.seckillPrice }}</span>
       </div>
 
-      <SeckillQuotaBar :quota="item.quota" :sold-count="item.sold_count" />
+      <!-- 名额进度条 -->
+      <SeckillQuotaBar
+        :quota="item.totalStock"
+        :sold-count="item.soldCount"
+      />
 
+      <!-- 抢购按钮 -->
       <button
         class="buy-btn"
         :class="btnClass"
@@ -72,19 +67,18 @@ const props = defineProps({
 })
 const emit = defineEmits(['click', 'buy', 'toggle'])
 
+// 按钮状态（基于 availableStock 判断是否售罄）
 const btnState = computed(() => {
   if (props.item.is_purchased) return 'purchased'
-  if (props.session.status === 'pending') return 'pending'
-  if (props.session.status === 'ended') return 'soldout'
-  if (props.item.quota > 0 && props.item.sold_count >= props.item.quota) return 'soldout'
+  // totalStock=0 表示不限量，availableStock=0 且 totalStock>0 表示售罄
+  if (props.item.totalStock > 0 && props.item.availableStock <= 0) return 'soldout'
   return 'active'
 })
 
 const btnText = computed(() => {
   switch (btnState.value) {
     case 'purchased': return '去学习'
-    case 'pending':   return '即将开始'
-    case 'soldout':   return `¥${props.item.original_price} 原价购买`
+    case 'soldout':   return `¥${props.item.originPrice} 原价购买`
     default:          return '立即抢购'
   }
 })
@@ -172,6 +166,26 @@ function handleCardClick() {
   padding: 2px 7px;
   border-radius: 0 0 6px 0;
   font-weight: 600;
+}
+.quota-badge.unlimited {
+  background: #22c55e;
+}
+/* 售罄遮罩 */
+.soldout-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px 6px 0 0;
+}
+.soldout-text {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
 /* 内容 */

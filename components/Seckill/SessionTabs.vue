@@ -14,8 +14,11 @@
       <span class="session-badge">
         <template v-if="session.status === 'active'">进行中</template>
         <template v-else-if="session.status === 'pending'">即将开始</template>
+        <template v-else-if="session.status === 'draft'">未发布</template>
         <template v-else>已结束</template>
       </span>
+      <!-- 下架标记 -->
+      <span v-if="session.rawStatus === 4" class="draft-tag">已下架</span>
     </div>
   </div>
 </template>
@@ -23,6 +26,7 @@
 <script setup>
 defineProps({
   sessions: { type: Array, default: () => [] },
+  // modelValue 为活动 id（Number）
   modelValue: { type: [Number, String], default: null },
 })
 defineEmits(['update:modelValue'])
@@ -82,5 +86,22 @@ defineEmits(['update:modelValue'])
 }
 .status-ended .session-name {
   color: #9ca3af;
+}
+/* 草稿 — 灰蓝色 */
+.status-draft .session-badge {
+  background: #6366f1;
+  color: #fff;
+}
+.status-draft .session-name {
+  color: #6366f1;
+}
+/* 草稿标记 */
+.draft-tag {
+  font-size: 10px;
+  margin-top: 2px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: #e5e7eb;
+  color: #6b7280;
 }
 </style>

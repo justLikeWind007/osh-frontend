@@ -10,88 +10,66 @@
     <n-form ref="formRef" :model="formData" :rules="rules" label-placement="left" label-width="90px">
 
       <!-- 商品类型 -->
-      <n-form-item label="商品类型" path="goods_type">
+      <n-form-item label="商品类型" path="goodsType">
         <n-select
-          v-model:value="formData.goods_type"
+          v-model:value="formData.goodsType"
           :options="typeOptions"
           placeholder="请选择商品类型"
-          @update:value="formData.goods_id = null; formData.title = ''; formData.cover = ''; formData.original_price = 0"
+          @update:value="formData.goodsId = null; formData.goodsName = ''; formData.goodsCover = ''; formData.originPrice = 0"
         />
       </n-form-item>
 
-      <!-- 商品名称（手动填写，兼容所有类型） -->
-      <n-form-item label="商品名称" path="title">
-        <n-input v-model:value="formData.title" placeholder="请输入商品名称" />
+      <!-- 商品名称 -->
+      <n-form-item label="商品名称" path="goodsName">
+        <n-input v-model:value="formData.goodsName" placeholder="请输入商品名称" />
       </n-form-item>
 
-      <!-- 商品ID（关联原始商品） -->
-      <n-form-item label="商品ID" path="goods_id">
+      <!-- 商品ID -->
+      <n-form-item label="商品ID" path="goodsId">
         <n-input-number
-          v-model:value="formData.goods_id"
+          v-model:value="formData.goodsId"
           placeholder="填写对应商品的ID"
           style="width: 100%"
           :min="1"
         />
         <template #feedback>
-          <span style="font-size:12px;color:#9ca3af">填写课程/电子书/题库/会员等对应表的主键ID</span>
+          <span style="font-size:12px;color:#9ca3af">填写课程/电子书/题库对应表的主键ID</span>
         </template>
       </n-form-item>
 
       <!-- 封面图 -->
-      <n-form-item label="封面图URL" path="cover">
-        <n-input v-model:value="formData.cover" placeholder="请输入封面图片地址" />
+      <n-form-item label="封面图URL" path="goodsCover">
+        <n-input v-model:value="formData.goodsCover" placeholder="请输入封面图片地址" />
       </n-form-item>
 
       <!-- 原价 -->
-      <n-form-item label="原价" path="original_price">
+      <n-form-item label="原价" path="originPrice">
         <n-input-number
-          v-model:value="formData.original_price"
-          :min="0"
-          :precision="2"
+          v-model:value="formData.originPrice"
+          :min="0" :precision="2"
           style="width: 100%"
-          placeholder="原价"
         >
           <template #prefix>¥</template>
         </n-input-number>
       </n-form-item>
 
-      <!-- 秒杀价 -->
-      <n-form-item label="秒杀价" path="seckill_price">
+      <!-- 最低秒杀价 -->
+      <n-form-item label="最低秒杀价" path="minSeckillPrice">
         <n-input-number
-          v-model:value="formData.seckill_price"
-          :min="0"
-          :precision="2"
+          v-model:value="formData.minSeckillPrice"
+          :min="0" :precision="2"
           style="width: 100%"
-          placeholder="秒杀价"
         >
           <template #prefix>¥</template>
         </n-input-number>
-      </n-form-item>
-
-      <!-- 名额 -->
-      <n-form-item label="名额总量" path="quota">
-        <n-input-number
-          v-model:value="formData.quota"
-          :min="0"
-          style="width: 100%"
-          placeholder="0 表示不限量"
-        />
         <template #feedback>
-          <span style="font-size:12px;color:#9ca3af">填 0 表示不限量</span>
+          <span style="font-size:12px;color:#9ca3af">活动中具体秒杀价在创建活动时设置</span>
         </template>
       </n-form-item>
 
-      <!-- 每人限购 -->
-      <n-form-item label="每人限购" path="limit_per_user">
-        <n-input-number
-          v-model:value="formData.limit_per_user"
-          :min="0"
-          style="width: 100%"
-          placeholder="0 表示不限"
-        />
-        <template #feedback>
-          <span style="font-size:12px;color:#9ca3af">填 0 表示不限购</span>
-        </template>
+      <!-- 排序 -->
+      <n-form-item label="排序" path="sort">
+        <n-input-number v-model:value="formData.sort" :min="0" style="width: 100%" placeholder="数字越大越靠前" />
       </n-form-item>
 
     </n-form>
@@ -121,33 +99,30 @@ const formRef = ref(null)
 const loading = ref(false)
 
 const typeOptions = [
-  { label: '网课', value: 'course' },
-  { label: '电子书', value: 'book' },
-  { label: '题库', value: 'exam' },
-  { label: '月会员', value: 'vip_month' },
-  { label: '年会员', value: 'vip_year' },
+  { label: '课程', value: 1 },
+  { label: '电子书', value: 2 },
+  { label: '商品', value: 3 },
 ]
 
 const defaultForm = () => ({
   id: null,
-  goods_type: 'course',
-  goods_id: null,
-  title: '',
-  cover: '',
-  original_price: 0,
-  seckill_price: 0,
-  quota: 0,
-  limit_per_user: 1,
+  goodsType: 1,
+  goodsId: null,
+  goodsName: '',
+  goodsCover: '',
+  originPrice: 0,
+  minSeckillPrice: 0,
+  sort: 0,
 })
 
 const formData = reactive(defaultForm())
 
 const rules = {
-  goods_type:     [{ required: true, message: '请选择商品类型', trigger: 'change' }],
-  title:          [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
-  goods_id:       [{ required: true, type: 'number', message: '请填写商品ID', trigger: 'blur' }],
-  seckill_price:  [{ required: true, type: 'number', message: '请填写秒杀价', trigger: 'blur' }],
-  original_price: [{ required: true, type: 'number', message: '请填写原价', trigger: 'blur' }],
+  goodsType:       [{ required: true, type: 'number', message: '请选择商品类型', trigger: 'change' }],
+  goodsName:       [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
+  goodsId:         [{ required: true, type: 'number', message: '请填写商品ID', trigger: 'blur' }],
+  originPrice:     [{ required: true, type: 'number', message: '请填写原价', trigger: 'blur' }],
+  minSeckillPrice: [{ required: true, type: 'number', message: '请填写最低秒杀价', trigger: 'blur' }],
 }
 
 // 弹窗打开时回填数据
@@ -174,7 +149,7 @@ async function handleSubmit() {
       await useSeckillGoodsUpdateApi({ ...formData })
       message.success('修改成功')
     } else {
-      // 新增 — 调用新增接口
+      // 新增 — 调用新增接口（1-3 添加商品到商品池）
       await useSeckillGoodsAddApi({ ...formData })
       message.success('新增成功')
     }
