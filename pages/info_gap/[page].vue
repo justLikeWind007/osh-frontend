@@ -111,7 +111,7 @@
                           <button
                             type="button"
                             class="feed-more-menu-item"
-                            @click.stop
+                            @click.stop="handleEditInfoGap(item)"
                           >
                             修改
                           </button>
@@ -219,7 +219,7 @@
     <n-modal
       v-model:show="showModal"
       preset="card"
-      title="发布我的信息差"
+      :title="isEditMode ? '修改信息差' : '发布我的信息差'"
       style="width: 600px"
     >
       <n-form :model="form">
@@ -287,10 +287,10 @@
 
       <template #footer>
         <n-space justify="end">
-          <n-button type="warning" @click="resetPublishForm">重置</n-button>
+          <n-button v-if="!isEditMode" type="warning" @click="resetPublishForm">重置</n-button>
           <n-button @click="showModal=false">取消</n-button>
           <n-button type="primary" :loading="btnLoading" @click="confirmPublish">
-            确认发布
+            {{ isEditMode ? '确认修改' : '确认发布' }}
           </n-button>
         </n-space>
       </template>
@@ -361,6 +361,8 @@ const queryParams = reactive({
 // 发布弹窗相关状态
 const showModal = ref(false);
 const btnLoading = ref(false);
+const isEditMode = ref(false);
+const editingInfoGapId = ref(null);
 const form = reactive({
   title: '',
   tag: '技术',
@@ -469,6 +471,8 @@ const handleTagClose = (tag, e) => {
 };
 
 const resetPublishForm = () => {
+  isEditMode.value = false;
+  editingInfoGapId.value = null;
   Object.assign(form, {
     title: '',
     tag: '技术',
@@ -652,6 +656,21 @@ const handleDetail = (id) => navigateTo(`/detail/info_gap/${id}`);
 // ==================== 7) 发布弹窗与发布流程 ====================
 // 打开发布弹窗
 const handlePublish = () => {
+  resetPublishForm();
+  showModal.value = true;
+};
+
+const handleEditInfoGap = (item) => {
+  isEditMode.value = true;
+  editingInfoGapId.value = item.id;
+  Object.assign(form, {
+    title: item.title || '',
+    tag: item.tag || '技术',
+    content: item.content || '',
+  });
+  selectedTags.value = candidateTags.value.filter((tag) =>
+    [item.tag1, item.tag2, item.tag3].includes(tag.name)
+  );
   showModal.value = true;
 };
 
@@ -672,16 +691,30 @@ const confirmPublish = async () => {
   console.log("tagIds =", tagIds);
 
   try {
-    const { data, error: postError } = await useHttpPost(
-      'add-info-gap',
-      '/info_gap/save',
-      {
-        body: {
+    const requestKey = isEditMode.value && editingInfoGapId.value
+      ? `update-info-gap-${editingInfoGapId.value}`
+      : 'add-info-gap';
+    const requestUrl = isEditMode.value ? '/info_gap/update' : '/info_gap/save';
+    const requestBody = isEditMode.value
+      ? {
+          id: editingInfoGapId.value,
+          title: form.title,
+          content: form.content,
+          tag: form.tag,
+          tagIds,
+        }
+      : {
           title: form.title,
           tag: form.tag,
           content: form.content,
           tagIds,
-        },
+        };
+
+    const { data, error: postError } = await useHttpPost(
+      requestKey,
+      requestUrl,
+      {
+        body: requestBody,
         $: true,
       }
     );
@@ -689,12 +722,17 @@ const confirmPublish = async () => {
     if (postError.value) throw new Error(postError.value);
 
     const { message } = createDiscreteApi(['message']);
-    message.success('发布成功！');
+    message.success(isEditMode.value ? '修改成功' : '发布成功');
 
+    const wasEditMode = isEditMode.value;
     showModal.value = false;
-    Object.assign(form, { title: '', tag: '技术', content: '' });
-    selectedTags.value = [];
-    await syncToPage(1);
+    resetPublishForm();
+
+    if (wasEditMode) {
+      await loadData();
+    } else {
+      await syncToPage(1);
+    }
   } catch (err) {
     console.error('发布失败:', err);
   } finally {
