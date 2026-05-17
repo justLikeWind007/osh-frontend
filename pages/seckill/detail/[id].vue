@@ -69,6 +69,17 @@
 
           <div class="price-divider" />
 
+          <!-- 购买数量选择器（limitPerUser > 1 时显示） -->
+          <div class="quantity-row" v-if="maxQuantity > 1">
+            <span class="quantity-label">购买数量：</span>
+            <div class="quantity-ctrl">
+              <button class="qty-btn" :disabled="quantity <= 1" @click="quantity = Math.max(1, quantity - 1)">−</button>
+              <span class="qty-val">{{ quantity }}</span>
+              <button class="qty-btn" :disabled="quantity >= maxQuantity" @click="quantity = Math.min(maxQuantity, quantity + 1)">+</button>
+            </div>
+            <span class="quantity-hint">最多 {{ maxQuantity }} 件</span>
+          </div>
+
           <!-- 支付超时提示 -->
           <div class="pay-timeout-hint" v-if="activityData?.payTimeoutMin">
             ⚠️ 抢购成功后请在 {{ activityData.payTimeoutMin }} 分钟内完成支付
@@ -200,6 +211,17 @@ const btnClass = computed(() => ({
 
 const remaining = computed(() => Math.max(0, goods.value?.availableStock || 0))
 
+// ── 购买数量 ─────────────────────────────────────────────────
+// limitPerUser 来自活动详情接口（接口9）的商品明细字段
+// limitPerUser=0 表示不限，此时选择器不显示，默认购买 1 件
+const maxQuantity = computed(() => {
+  const limit = goods.value?.limitPerUser || 0
+  return limit > 1 ? limit : 1
+})
+const quantity = ref(1)
+// 切换商品时重置数量
+watch(goods, () => { quantity.value = 1 })
+
 // ── 带 token 的 $fetch 辅助（解决 useHttp 在异步上下文取不到 token 的问题） ──
 const { seckillFetch } = useSeckillFetch()
 
@@ -225,10 +247,11 @@ async function handleBuy() {
   loading.value = true
   loadingText.value = '抢购中...'
 
-  // Step 1：执行秒杀
+  // Step 1：执行秒杀（quantity 默认 1，limitPerUser > 1 时由用户选择）
   let doRes
   try {
-    doRes = await seckillFetch(`/seckill/user/do/${activityId}/${itemId}`, { method: 'POST' })
+    const query = quantity.value > 1 ? `?quantity=${quantity.value}` : ''
+    doRes = await seckillFetch(`/seckill/user/do/${activityId}/${itemId}${query}`, { method: 'POST' })
   } catch (e) {
     message.error(e?.data?.msg || '秒杀失败，请重试')
     loading.value = false
@@ -262,10 +285,11 @@ function startPolling(seckillNo) {
 
     let result
     try {
-      result = await seckillFetch(`/seckill/user/order/result/${activityId}/${itemId}`)
+      // 改用接口14（按 seckillNo 查），直接锁定本次订单，不会查到旧订单
+      result = await seckillFetch(`/seckill/user/order/status/${seckillNo}`)
     } catch (e) {
       const msg = e?.data?.msg || ''
-      // "暂未查到秒杀结果" = Kafka 还在处理，继续轮询
+      // Kafka 还在处理，继续轮询
       if (msg.includes('暂未查到') || msg.includes('尚未查到') || msg.includes('请稍后')) {
         return
       }
@@ -387,6 +411,19 @@ const activeTab = ref('intro')
 .promise-list { display: flex; flex-direction: column; gap: 6px; }
 .promise-item { font-size: 13px; color: #374151; }
 .pay-timeout-hint { font-size: 12px; color: #f59e0b; background: #fffbeb; padding: 6px 10px; border-radius: 4px; margin-bottom: 10px; }
+
+.quantity-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.quantity-label { font-size: 13px; color: #6b7280; white-space: nowrap; }
+.quantity-ctrl { display: flex; align-items: center; gap: 0; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+.qty-btn {
+  width: 30px; height: 30px; border: none; background: #f9fafb;
+  font-size: 16px; font-weight: 600; color: #374151; cursor: pointer;
+  transition: background 0.15s; line-height: 1;
+}
+.qty-btn:hover:not(:disabled) { background: #f3f4f6; color: #e1251b; }
+.qty-btn:disabled { color: #d1d5db; cursor: not-allowed; }
+.qty-val { min-width: 36px; text-align: center; font-size: 14px; font-weight: 600; color: #111; padding: 0 4px; }
+.quantity-hint { font-size: 12px; color: #9ca3af; }
 
 .buy-btn { width: 100%; padding: 12px 0; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 10px; transition: all 0.2s; }
 .btn-active { background: linear-gradient(135deg, #ff6b35, #f43f5e); color: #fff; }

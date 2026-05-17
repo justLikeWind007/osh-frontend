@@ -222,10 +222,14 @@ export function useSeckillUserActivityDetailApi(id) {
 }
 
 // 3-3 执行秒杀（核心接口）
-// POST /pc/seckill/user/do/{activityId}/{itemId}?userId=xxx
+// POST /pc/seckill/user/do/{activityId}/{itemId}?quantity=N
+// quantity 可选，默认 1；limitPerUser > 1 时前端传入用户选择的数量
 // 返回: { seckillNo, status, goodsId, goodsType, seckillPrice, payExpireTime, ... }
-export function useSeckillDoApi(activityId, itemId) {
-  return useHttpPost('SeckillDo', `/seckill/user/do/${activityId}/${itemId}`, {
+export function useSeckillDoApi(activityId, itemId, quantity = 1) {
+  const path = quantity > 1
+    ? `/seckill/user/do/${activityId}/${itemId}?quantity=${quantity}`
+    : `/seckill/user/do/${activityId}/${itemId}`
+  return useHttpPost('SeckillDo', path, {
     $: true,
   })
 }

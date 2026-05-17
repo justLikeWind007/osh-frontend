@@ -11,7 +11,7 @@
 
     <!-- 封面 -->
     <div class="card-cover" :class="item.goodsType === 2 ? 'cover-book' : 'cover-course'">
-      <img :src="item.cover || '/default-cover.jpg'" :alt="item.title" loading="lazy" />
+      <img :src="item.cover || 'https://placehold.co/400x200/f5f5f5/bbb?text=暂无封面'" :alt="item.title" loading="lazy" @error="onImgError" />
       <div class="quota-badge" v-if="item.totalStock > 0">🔥 限量{{ item.totalStock }}名</div>
       <div class="quota-badge unlimited" v-else>∞ 不限量</div>
       <!-- 售罄遮罩 -->

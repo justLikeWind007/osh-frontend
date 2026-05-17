@@ -117,6 +117,26 @@ function handlePayExpire() {
   stopPayPolling()
 }
 
+// ── 页面加载时查一次真实订单状态，避免依赖 URL 参数里的过期时间 ──
+onMounted(async () => {
+  if (!seckillNo) return
+  try {
+    const res = await seckillFetch(`/seckill/user/order/status/${seckillNo}`)
+    if (res?.code !== 200 || !res?.data) return
+    const s = res.data.status
+    if (s === 1) {
+      // 已支付，直接跳转
+      handlePaySuccess()
+    } else if (s === 2 || s === 3) {
+      // 已取消或已超时，标记为超时
+      payExpired.value = true
+    }
+    // s === 0 待支付，正常展示页面
+  } catch {
+    // 查询失败，不影响页面展示
+  }
+})
+
 // ── 发起支付（接口：POST /seckill/user/order/pay/{seckillNo}） ─
 const payLoading = ref(false)
 const payData    = ref(null)  // { code, payUrl, qrcode, outTradeNo }
