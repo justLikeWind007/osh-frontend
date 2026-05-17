@@ -93,7 +93,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { NForm, NFormItem, NInput, NButton, NSpace, NBreadcrumb, NBreadcrumbItem, NSelect } from 'naive-ui'
 import {
@@ -105,10 +105,13 @@ import {
   resolveFeedbackCategoryIcon,
   resolveFeedbackErrorMessage
 } from '~/composables/assistant'
-import { useHasAuth } from '~/composables/useAuth'
+import { sortFeedbackTags } from '~/composables/feedbackTag'
+import { useHasAuth, useUser } from '~/composables/useAuth'
 
+const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const user = useUser()
 const MAX_FEEDBACK_TAG_COUNT = 3
 
 const categories = ref([])
@@ -137,6 +140,20 @@ const tagOptions = computed(() => tags.value.map(tag => ({
 
 const currentCategoryDescription = computed(() => categories.value
   .find(category => category.id === form.value.categoryId)?.description || '')
+
+const draftStorageKey = computed(() => {
+  const currentUserId = user.value?.id || user.value?.userId || user.value?.uid
+  if (currentUserId) {
+    return `feedback_draft_${currentUserId}`
+  }
+
+  const tokenValue = useCookie('token').value
+  if (tokenValue) {
+    return `feedback_draft_token_${tokenValue.slice(-12)}`
+  }
+
+  return 'feedback_draft_guest'
+})
 
 const rules = {
   categoryId: { 
@@ -168,7 +185,7 @@ onMounted(async () => {
   
   // 自动填充页面路径
   if (process.client) {
-    form.value.pagePath = document.referrer || window.location.href
+    form.value.pagePath = resolveFeedbackSourcePath()
   }
 })
 
@@ -185,7 +202,7 @@ async function loadCategories() {
 async function loadTags() {
   try {
     const res = await apiGetFeedbackTags()
-    tags.value = res.data || []
+    tags.value = sortFeedbackTags(res.data || [])
   } catch (error) {
     message.error(resolveFeedbackErrorMessage(error, '加载标签失败'))
     console.error('加载标签失败:', error)
@@ -194,8 +211,7 @@ async function loadTags() {
 
 function loadDraft() {
   if (process.client) {
-    const userId = localStorage.getItem('userId') || 'guest'
-    const draft = localStorage.getItem(`feedback_draft_${userId}`)
+    const draft = localStorage.getItem(draftStorageKey.value)
     if (draft) {
       try {
         const draftData = JSON.parse(draft)
@@ -213,8 +229,7 @@ function loadDraft() {
 
 function handleSaveDraft() {
   if (process.client) {
-    const userId = localStorage.getItem('userId') || 'guest'
-    localStorage.setItem(`feedback_draft_${userId}`, JSON.stringify(form.value))
+    localStorage.setItem(draftStorageKey.value, JSON.stringify(form.value))
     message.success('草稿已保存')
   }
 }
@@ -244,8 +259,7 @@ async function handleSubmit() {
 
     // 清除草稿
     if (process.client) {
-      const userId = localStorage.getItem('userId') || 'guest'
-      localStorage.removeItem(`feedback_draft_${userId}`)
+      localStorage.removeItem(draftStorageKey.value)
     }
 
     message.success('提交成功')
@@ -377,7 +391,7 @@ function mergeFeedbackTags(currentTags, nextTags) {
     result[tag.id] = tag
     return result
   }, {})
-  return Object.values(tagMap)
+  return sortFeedbackTags(Object.values(tagMap))
 }
 
 async function resolvePendingTagNamesFromForm() {
@@ -434,6 +448,27 @@ function parseExistingTagId(tagKey) {
 
 function parsePendingTagName(tagKey) {
   return tagKey.replace('name:', '').trim()
+}
+
+function resolveFeedbackSourcePath() {
+  if (!process.client) {
+    return route.fullPath || '/feedback/create'
+  }
+
+  const referrer = document.referrer
+  if (!referrer) {
+    return route.fullPath || '/feedback/create'
+  }
+
+  try {
+    const referrerUrl = new URL(referrer)
+    if (referrerUrl.origin !== window.location.origin) {
+      return route.fullPath || '/feedback/create'
+    }
+    return `${referrerUrl.pathname}${referrerUrl.search}${referrerUrl.hash}` || route.fullPath || '/feedback/create'
+  } catch (error) {
+    return route.fullPath || '/feedback/create'
+  }
 }
 </script>
 
