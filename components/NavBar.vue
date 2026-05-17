@@ -54,7 +54,7 @@
               <n-avatar  
                 round
                 size="small"
-                :src="user?.avatar || 'https://07akioni.oss-cn-beijing.aliyuncs.com/07akioni.jpeg'"
+                :src="user?.avatar || DEFAULT_AVATAR"
               />
               <span class="user-name">{{ user?.username || '用户' }}</span>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" class="chevron">

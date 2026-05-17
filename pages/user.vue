@@ -9,14 +9,12 @@
                     <n-avatar
                         round
                         :size="72"
-                        :src="user?.avatar || ''"
-                        :fallback-src="defaultAvatar"
+                        :src="user?.avatar || defaultAvatar"
                         class="user-avatar"
                     />
                 </div>
                 <!-- 昵称 / 用户名 -->
-                <div class="user-name">{{ user?.nickname || user?.username || '未登录' }}</div>
-                <div class="user-account">@{{ user?.username }}</div>
+                <div class="user-name">{{ user?.username || '未登录' }}</div>
                 <!-- 资产 -->
                 <div class="asset-row">
                     <div class="asset-item">
@@ -73,7 +71,7 @@ const pageKey = computed(() => route.fullPath)
 const activeName = computed(() => route.name)
 const user = useUser()
 
-const defaultAvatar = 'https://api.dicebear.com/7.x/identicon/svg?seed=osh'
+const defaultAvatar = DEFAULT_AVATAR
 
 // 访问 /user 根路径时默认跳转到基本信息页
 onMounted(() => {
@@ -143,12 +141,6 @@ definePageMeta({
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.user-account {
-    font-size: 0.75rem;
-    color: #9ca3af;
-    text-align: center;
 }
 
 .asset-row {

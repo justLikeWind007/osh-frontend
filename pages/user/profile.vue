@@ -2,23 +2,41 @@
     <div class="profile-page">
         <h3 class="page-title">基本信息</h3>
 
-        <!-- 头像上传 -->
-        <n-form-item label="头像" label-width="90" label-placement="left" class="avatar-item">
+        <!-- 头像区域（独立上传，不参与表单提交） -->
+        <div class="avatar-section">
+            <div class="avatar-section-label">头像</div>
             <div class="avatar-wrap">
                 <n-avatar
                     round
                     :size="72"
-                    :src="avatarPreview"
-                    :fallback-src="defaultAvatar"
-                    class="avatar-preview"
+                    :src="currentAvatar"
+                    class="avatar-img"
                 />
                 <div class="avatar-upload-area">
-                    <Uploader v-model="form.avatar" />
-                    <span class="avatar-tip">支持 JPG、PNG、GIF，建议 200×200</span>
+                    <ClientOnly>
+                        <n-upload
+                            accept="image/png,image/jpeg,image/gif,image/webp"
+                            :action="uploadAction"
+                            :headers="uploadHeaders"
+                            name="file"
+                            :show-file-list="false"
+                            :max="1"
+                            @finish="onAvatarUploaded"
+                            @error="onAvatarError"
+                        >
+                            <n-button size="small" type="primary" :loading="avatarUploading">
+                                {{ avatarUploading ? '上传中...' : '更换头像' }}
+                            </n-button>
+                        </n-upload>
+                    </ClientOnly>
+                    <span class="avatar-tip">支持 JPG、PNG、GIF、WebP，最大 3MB</span>
                 </div>
             </div>
-        </n-form-item>
+        </div>
 
+        <n-divider />
+
+        <!-- 基本信息表单 -->
         <n-form
             ref="formRef"
             :model="form"
@@ -27,27 +45,19 @@
             label-placement="left"
             class="info-form"
         >
-            <!-- 用户名（只读） -->
-            <n-form-item label="用户名">
-                <n-input :value="user?.username" disabled />
-                <template #feedback>
-                    <span class="field-tip">用户名创建后不可修改</span>
-                </template>
+            <!-- 用户名（可修改） -->
+            <n-form-item label="用户名" path="username">
+                <n-input
+                    v-model:value="form.username"
+                    placeholder="请输入用户名"
+                    maxlength="20"
+                    show-count
+                />
             </n-form-item>
 
             <!-- 邮箱（只读） -->
             <n-form-item label="邮箱">
                 <n-input :value="user?.email || '未绑定'" disabled />
-            </n-form-item>
-
-            <!-- 昵称 -->
-            <n-form-item label="昵称" path="nickname">
-                <n-input
-                    v-model:value="form.nickname"
-                    placeholder="请输入昵称"
-                    maxlength="20"
-                    show-count
-                />
             </n-form-item>
 
             <!-- 性别 -->
@@ -106,6 +116,8 @@ import {
     NSpace,
     NTag,
     NAvatar,
+    NDivider,
+    NUpload,
     createDiscreteApi
 } from 'naive-ui'
 
@@ -114,21 +126,55 @@ useHead({ title: '基本信息' })
 const user = useUser()
 const formRef = ref(null)
 const loading = ref(false)
-const defaultAvatar = 'https://api.dicebear.com/7.x/identicon/svg?seed=osh'
+const defaultAvatar = DEFAULT_AVATAR
 
+// ── 头像（独立逻辑） ──
+const avatarUploading = ref(false)
+const currentAvatar = computed(() => user.value?.avatar || defaultAvatar)
+
+// 上传配置：直接对接后端 /pc/user/upload_avatar
+const { action: uploadAction, headers: uploadHeaders } = (() => {
+    const token = useCookie('token')
+    return {
+        action: fetchConfig.baseURL + '/user/upload_avatar',
+        headers: {
+            appid: fetchConfig.headers.appid,
+            token: token.value,
+            Authorization: `Bearer ${token.value}`,
+        }
+    }
+})()
+
+function onAvatarUploaded({ event }) {
+    avatarUploading.value = false
+    try {
+        const res = JSON.parse(event.target.response)
+        if (res.code === 200 && res.data) {
+            // 后端返回新头像 URL，更新全局 user
+            user.value = { ...user.value, avatar: res.data }
+            const { message } = createDiscreteApi(['message'])
+            message.success('头像更新成功')
+        } else {
+            const { message } = createDiscreteApi(['message'])
+            message.error(res.msg || '头像上传失败')
+        }
+    } catch {
+        const { message } = createDiscreteApi(['message'])
+        message.error('头像上传失败')
+    }
+}
+
+function onAvatarError() {
+    avatarUploading.value = false
+    const { message } = createDiscreteApi(['message'])
+    message.error('头像上传失败')
+}
+
+// ── 基本信息表单（不含头像） ──
 const form = reactive({
-    avatar:       user.value?.avatar       || '',
-    nickname:     user.value?.nickname     || '',
+    username:     user.value?.username     || '',
     sex:          user.value?.sex          || '未知',
     introduction: user.value?.introduction || '',
-})
-
-// 头像预览：上传组件返回对象时取 previewUrl，否则直接用字符串 URL
-const avatarPreview = computed(() => {
-    if (form.avatar && typeof form.avatar === 'object') {
-        return form.avatar.previewUrl || form.avatar.url || ''
-    }
-    return form.avatar || user.value?.avatar || ''
 })
 
 const sexOptions = [
@@ -137,8 +183,6 @@ const sexOptions = [
     { label: '女',   value: '女'   },
 ]
 
-// 根据 violationCount 计算账号状态
-// 0 → 正常；1-2 → 警示用户；3+ → 已拉黑
 const statusTag = computed(() => {
     const count = user.value?.violationCount ?? 0
     if (count >= 3) {
@@ -151,9 +195,9 @@ const statusTag = computed(() => {
 })
 
 const rules = {
-    nickname: [
-        { required: true, message: '昵称不能为空', trigger: ['blur', 'input'] },
-        { min: 1, max: 20, message: '昵称长度 1~20 个字符', trigger: ['blur', 'input'] },
+    username: [
+        { required: true, message: '用户名不能为空', trigger: ['blur', 'input'] },
+        { min: 2, max: 20, message: '用户名长度 2~20 个字符', trigger: ['blur', 'input'] },
     ],
 }
 
@@ -163,17 +207,10 @@ const onSubmit = () => {
 
         loading.value = true
 
-        // 后端 UserUpdateInfoDTO 接受 avatar / nickname / sex
-        // introduction 后端暂不支持，不传
-        // avatar：上传组件返回对象时取 previewUrl，否则直接用字符串
-        const avatarUrl = typeof form.avatar === 'object'
-            ? (form.avatar?.previewUrl || form.avatar?.url || '')
-            : (form.avatar || '')
-
         const { error } = await useUpdateUserInfoApi({
-            avatar:   avatarUrl,
-            nickname: form.nickname,
-            sex:      form.sex,
+            username:     form.username,
+            sex:          form.sex,
+            introduction: form.introduction,
         })
 
         loading.value = false
@@ -198,13 +235,46 @@ const onSubmit = () => {
     margin: 0 0 1.5rem;
 }
 
-.info-form {
-    max-width: 480px;
+/* 头像区域 */
+.avatar-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    margin-bottom: 0.25rem;
 }
 
-.field-tip {
+.avatar-section-label {
+    width: 90px;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    color: #333;
+    padding-top: 0.5rem;
+}
+
+.avatar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.avatar-img {
+    flex-shrink: 0;
+}
+
+.avatar-upload-area {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.avatar-tip {
     font-size: 0.72rem;
     color: #9ca3af;
+}
+
+/* 表单 */
+.info-form {
+    max-width: 480px;
 }
 
 .status-tip {
@@ -216,32 +286,5 @@ const onSubmit = () => {
 
 .submit-btn {
     min-width: 120px;
-}
-
-/* 头像区域 */
-.avatar-item {
-    margin-bottom: 0.5rem;
-}
-
-.avatar-wrap {
-    display: flex;
-    align-items: flex-start;
-    gap: 1.25rem;
-}
-
-.avatar-preview {
-    flex-shrink: 0;
-    margin-top: 0.25rem;
-}
-
-.avatar-upload-area {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-
-.avatar-tip {
-    font-size: 0.72rem;
-    color: #9ca3af;
 }
 </style>

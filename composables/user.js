@@ -114,12 +114,31 @@ export function useCollectApi(body) {
     })
 }
 
-// 修改资料（avatar、nickname、sex）
+// 修改资料（avatar、username、sex、introduction）
 export function useUpdateUserInfoApi(body) {
     return useHttpPost("updateUserInfo", "/user/update_info", {
         body
     })
 }
+
+// 上传头像（返回头像 URL）
+export function useUploadAvatarApi(file) {
+    const token = useCookie("token")
+    const formData = new FormData()
+    formData.append('file', file)
+    return $fetch(fetchConfig.baseURL + "/user/upload_avatar", {
+        method: 'POST',
+        headers: {
+            appid: fetchConfig.headers.appid,
+            token: token.value,
+            Authorization: `Bearer ${token.value}`,
+        },
+        body: formData,
+    })
+}
+
+// 默认头像（用户未设置头像时使用）
+export const DEFAULT_AVATAR = '/default-avatar.png'
 
 // 上传图片
 export function useUploadConfig() {
