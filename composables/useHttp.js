@@ -134,6 +134,32 @@ export async function useHttp(key,url,options = {}){
     return res
 }
 
+export async function request(key, url, options = {}) {
+    options = useGetFetchOptions(options)
+    return await $fetch(url, options).then(res => {
+        // 直接返回接口的整个数据
+        return res
+    }).catch(err => {
+        const msg = err?.data?.data
+        if (process.client && isAuthExpiredError(err)) {
+            // 统一走登录失效处理，避免业务页只看到“保存失败”。
+            handleAuthExpired(null, err?.data?.msg || msg || '登录已过期，请重新登录')
+            return {
+                code: err?.data?.code,
+                data: null
+            }
+        }
+        if (process.client) {
+            const { message } = createDiscreteApi(["message"])
+            message.error(msg || '服务端错误')
+        }
+        return {
+            code: err?.data?.code,
+            data: null
+        }
+    })
+}
+
 // GET请求
 export function useHttpGet(key,url,options = {}){
     options.method = "GET"

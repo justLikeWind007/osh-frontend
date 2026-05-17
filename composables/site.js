@@ -148,3 +148,24 @@ export function useSiteTagsBySiteIdApi(siteId) {
         $: true
     })
 }
+
+// 启动演示站点后端服务
+export function useSiteDemoStartApi(id) {
+    return request("SiteDemoStart", `/site/demo/start/${id}`, {
+        method: "POST",
+    })
+}
+
+// 检查演示站点后端服务状态
+export function useSiteDemoCheckApi(id) {
+    return request("SiteDemoCheck", `/site/demo/check/${id}`, {
+        method: "POST",
+    })
+}
+
+// 停止演示站点服务
+export function useSiteDemoStopApi(id) {
+    return request("SiteDemoStop", `/site/demo/stop/${id}`, {
+        method: "POST",
+    })
+}

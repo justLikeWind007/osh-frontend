@@ -11,7 +11,7 @@ import {
 import { ref } from 'vue'
 
 const props = defineProps({
-    modelValue: []
+    modelValue: Array<number>
 })
 
 const value = ref(props.modelValue)

@@ -194,8 +194,8 @@ const menus = ref([
     name: '内部资源', 
     iconComponent: SiteIcon,
     children: [
-      { name: '内部网站', path: '/site' },
-      { name: '内部资源', path: '/resource', match: [{ name: 'resource' }] }
+      { name: '内部网站', path: '/site', match: [{ name: 'site-index' }] , iconComponent: SiteIcon},
+      { name: '内部资源', path: '/resource', match: [{ name: 'resource' }], iconComponent: InfoIcon }
     ]
   },
   { name: '审核', path: '/audit', match: [{ name: 'audit' }], iconComponent: AuditIcon }
@@ -203,7 +203,7 @@ const menus = ref([
 
 onMounted(() => {
   const permissions = usePermissions()
-  const internalMenuIndex = menus.value.findIndex(item => item.name === '内部');
+  const internalMenuIndex = menus.value.findIndex(item => item.name === '内部资源');
   
   if (internalMenuIndex !== -1) {
     const internalMenu = menus.value[internalMenuIndex];

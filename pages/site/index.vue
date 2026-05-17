@@ -14,6 +14,8 @@
                 </n-input>
                 <n-select v-model:value="searchForm.status" placeholder="状态筛选" :options="statusOptions" clearable
                     style="width: 120px; margin-right: 8px;" @update:value="handleSearch" />
+                <n-select v-model:value="searchForm.siteType" placeholder="网站类型" :options="siteTypeSearchOptions" clearable
+                    style="width: 140px; margin-right: 8px;" @update:value="handleSearch" />
                 <n-button type="primary" @click="handleSearch" style="margin-right: 8px;">搜索</n-button>
                 <n-button type="primary" @click="handleRefreshAll" style="margin-right: 8px;" :loading="checkingAll">
                     <template #icon><n-icon>
@@ -82,12 +84,42 @@
                                 </n-icon>
                             </template>
                         </n-button>
+                        <!-- 演示站点操作按钮 -->
+                        <template v-if="site.siteType === 'demo'">
+                            <n-tooltip trigger="hover">
+                                <template #trigger>
+                                    <n-button size="small" type="info" @click.stop="handleDemoStart(site)" class="card-action-btn" :loading="site._demoStarting">
+                                        <template #icon><n-icon><PlayCircleOutline /></n-icon></template>
+                                    </n-button>
+                                </template>
+                                启动
+                            </n-tooltip>
+                            <n-tooltip trigger="hover">
+                                <template #trigger>
+                                    <n-button size="small" type="warning" @click.stop="handleDemoCheck(site)" class="card-action-btn" :loading="site._demoChecking">
+                                        <template #icon><n-icon><CheckmarkCircleOutline /></n-icon></template>
+                                    </n-button>
+                                </template>
+                                检查
+                            </n-tooltip>
+                            <n-tooltip trigger="hover">
+                                <template #trigger>
+                                    <n-button size="small" type="error" @click.stop="handleDemoStop(site)" class="card-action-btn" :loading="site._demoStopping">
+                                        <template #icon><n-icon><StopCircleOutline /></n-icon></template>
+                                    </n-button>
+                                </template>
+                                停止
+                            </n-tooltip>
+                        </template>
                     </div>
                 </div>
 
                 <!-- 网站信息 -->
                 <div class="site-info">
-                    <div class="site-name">{{ site.siteName }}</div>
+                    <div class="site-name">
+                        {{ site.siteName }}
+                        <n-tag v-if="site.siteTypeName" size="tiny" :bordered="false" type="info" style="margin-left: 6px; vertical-align: middle;">{{ site.siteTypeName }}</n-tag>
+                    </div>
                     <div v-if="site.description" class="site-desc">{{ site.description }}</div>
                     <!-- 标签 -->
                     <div v-if="site.tagList && site.tagList.length > 0" class="site-tags">
@@ -120,11 +152,19 @@
          -->
 
         <!-- 新增/编辑 弹窗 -->
-        <n-modal v-model:show="showModal" :title="modalTitle" preset="card" style="width: 560px;"
+        <n-modal v-model:show="showModal" :title="modalTitle" preset="card" style="width: 620px;"
             :mask-closable="false">
             <n-form ref="formRef" :model="formData" :rules="formRules" label-placement="left" label-width="90px">
                 <n-form-item label="网站名称" path="siteName">
                     <n-input v-model:value="formData.siteName" placeholder="请输入网站名称" maxlength="100" show-count />
+                </n-form-item>
+                <n-form-item label="网站类型">
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <n-select v-model:value="formData.siteType" placeholder="请选择网站类型" :options="siteTypeOptions" clearable style="flex: 1;" />
+                        <n-button v-if="formData.siteType === 'demo'" type="primary" @click="showDemoConfigModal = true" style="min-width: 120px;">
+                            演示配置
+                        </n-button>
+                    </div>
                 </n-form-item>
                 <n-form-item label="访问地址" path="siteUrl">
                 <n-input v-model:value="formData.siteUrl" placeholder="请输入网站地址，如 https://example.com"
@@ -159,6 +199,17 @@
                 <div style="display: flex; justify-content: flex-end; gap: 8px;">
                     <n-button @click="showModal = false">取消</n-button>
                     <n-button type="primary" :loading="submitting" @click="handleSubmit">确定</n-button>
+                </div>
+            </template>
+        </n-modal>
+
+        <!-- 演示站点配置弹窗 -->
+        <n-modal v-model:show="showDemoConfigModal" title="演示站点配置" preset="card" style="width: 720px;"
+            :mask-closable="false">
+            <SiteDemoConfigForm v-model:site-config="formData.siteConfig" />
+            <template #footer>
+                <div style="display: flex; justify-content: flex-end;">
+                    <n-button type="primary" @click="showDemoConfigModal = false">完成</n-button>
                 </div>
             </template>
         </n-modal>
@@ -203,10 +254,13 @@
 import {
     NInput, NButton, NSelect, NModal, NForm, NFormItem,
     NTag, NSpin, NEmpty,
-    NIcon, createDiscreteApi, NDataTable
+    NIcon, createDiscreteApi, NDataTable, NTooltip
 } from 'naive-ui'
-import { Search, Add, Globe, CreateOutline, TrashOutline, Refresh, TimeOutline } from '@vicons/ionicons5'
+import SiteDemoConfigForm from './SiteDemoConfigForm.vue'
+import { Search, Add, Globe, CreateOutline, TrashOutline, Refresh, TimeOutline, PlayCircleOutline, CheckmarkCircleOutline, StopCircleOutline } from '@vicons/ionicons5'
 import { h } from 'vue'
+
+const preContent = (text) => () => h('pre', { style: 'white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; margin: 0; font-family: inherit;' }, text)
 
 useHead({
     title: '内部网站 - 开源助手',
@@ -246,7 +300,13 @@ const pageSize = ref(100000)
 const searchForm = reactive({
     siteName: '',
     status: null,
+    siteType: null,
 })
+
+// 网站类型搜索选项
+const siteTypeSearchOptions = [
+    { label: '演示站点', value: 'demo' }
+]
 
 // 弹窗
 const showModal = ref(false)
@@ -258,15 +318,25 @@ const formRef = ref(null)
 const defaultFormData = () => ({
     id: null,
     siteName: '测试站点',
+    siteType: null,
     siteUrl: 'https://www.baidu.com',
     cover: '',
     description: '',
     maintainerUserIds: [],
     tags: [],
     status: 1,
+    siteConfig: {}
 })
 
 const formData = reactive(defaultFormData())
+
+// 演示配置弹窗
+const showDemoConfigModal = ref(false)
+
+// 网站类型选项
+const siteTypeOptions = [
+    { label: '演示站点', value: 'demo' }
+]
 
 // 标签相关
 const allTags = ref([])
@@ -337,6 +407,7 @@ async function loadList() {
         }
         if (searchForm.siteName) query.siteName = searchForm.siteName
         if (searchForm.status !== null) query.status = searchForm.status
+        if (searchForm.siteType) query.siteType = searchForm.siteType
 
         const { data } = await useSiteInfoListApi(query)
         if (data.value ) {
@@ -385,11 +456,13 @@ function openEditModal(site) {
             Object.assign(formData, {
                 id: site.id,
                 siteName: siteInfo.siteName || '',
+                siteType: siteInfo.siteType || null,
                 siteUrl: siteInfo.siteUrl || '',
                 description: site.description || '',
                 tags: tags,
                 maintainerUserIds: maintainerUserIds,
                 status: siteInfo.status ?? 1,
+                siteConfig: siteInfo.siteConfig || {}
             })
             showModal.value = true
         }
@@ -445,6 +518,200 @@ function handleDelete(id) {
                 message.error('删除失败')
             }
         },
+    })
+}
+
+// ========== 演示站点操作 ==========
+
+// 启动演示站点后端服务
+async function handleDemoStart(site) {
+    const { dialog, message } = createDiscreteApi(['dialog', 'message'])
+    site._demoStarting = true
+    try {
+        message.info('正在启动服务，请耐心等待...')
+        useSiteDemoStartApi(site.id).then((res) => {
+            if (res.code === 200) {
+                const result = res.data
+                if (result?.started) {
+                    let info = '服务已成功启动！\n\n'
+                    if (result.healthCheckOutput) {
+                        info += '📋 检查输出：\n' + result.healthCheckOutput + '\n\n'
+                    }
+                    if (result.frontendUrl) {
+                        info += '🌐 访问地址：\n' + result.frontendUrl + '\n\n'
+                    }
+                    if (result.loginUsername) {
+                        info += '🔑 登录凭证：\n用户名：' + result.loginUsername
+                        if (result.loginPassword) info += '\n密码：' + result.loginPassword
+                    }
+                    dialog.success({
+                        title: '启动成功',
+                        content: preContent(info),
+                        positiveText: '访问站点',
+                        onPositiveClick: () => {
+                            if (result.frontendUrl) {
+                                window.open(result.frontendUrl, '_blank')
+                            }
+                        }
+                    })
+                } else {
+                    dialog.warning({
+                        title: '启动超时',
+                        content: preContent((result?.message || '健康检查未通过') + '\n\n请稍后手动检查服务状态'),
+                        positiveText: '确定'
+                    })
+                }
+            } else {
+                dialog.error({
+                    title: '启动失败',
+                    content: preContent(res.msg || '服务端错误'),
+                    positiveText: '确定'
+                })
+            }
+        })
+    } catch (e) {
+        dialog.error({
+            title: '启动失败',
+            content: preContent(e.message || '连接异常'),
+            positiveText: '确定'
+        })
+    } finally {
+        site._demoStarting = false
+    }
+}
+
+// 检查演示站点服务状态
+async function handleDemoCheck(site) {
+    const { dialog, message } = createDiscreteApi(['dialog', 'message'])
+    site._demoChecking = true
+    try {
+        useSiteDemoCheckApi(site.id).then(res => {
+            if (res.code === 200) {
+                const result = res.data
+                let info = ''
+
+                // 健康状态
+                if (result?.healthy !== undefined) {
+                    info += '🩺 服务状态：' + (result.healthy ? '✅ 正常运行' : '❌ 异常')
+                    if (result.exitCode !== undefined) info += ' (退出码: ' + result.exitCode + ')'
+                    info += '\n'
+                }
+
+                // 检查输出
+                if (result?.output) {
+                    info += '\n📋 检查输出：\n' + result.output + '\n'
+                }
+
+                // 错误信息
+                if (result?.error) {
+                    info += '\n⚠ 错误：' + result.error + '\n'
+                }
+
+                // 访问地址
+                if (result?.frontendUrl) {
+                    info += '\n🌐 访问地址：' + result.frontendUrl + '\n'
+                }
+
+                // 登录凭证
+                if (result?.loginUsername) {
+                    info += '\n🔑 登录凭证：\n用户名：' + result.loginUsername
+                    if (result.loginPassword) info += '\n密码：' + result.loginPassword
+                }
+
+                if (result?.healthy) {
+                    dialog.success({
+                        title: '检查结果 — 服务正常',
+                        content: preContent(info),
+                        positiveText: '访问站点',
+                        onPositiveClick: () => {
+                            if (result.frontendUrl) {
+                                window.open(result.frontendUrl, '_blank')
+                            }
+                        }
+                    })
+                } else if (info) {
+                    dialog.warning({
+                        title: '检查结果 — 服务异常',
+                        content: preContent(info),
+                        positiveText: '确定'
+                    })
+                } else {
+                    message.success('状态检查完成')
+                }
+            } else {
+                dialog.error({
+                    title: '检查失败',
+                    content: preContent(res.msg || '服务端错误'),
+                    positiveText: '确定'
+                })
+            }
+        })
+
+    } catch (e) {
+        dialog.error({
+            title: '检查失败',
+            content: preContent(e.message || '连接异常'),
+            positiveText: '确定'
+        })
+    } finally {
+        site._demoChecking = false
+    }
+}
+
+// 停止演示站点服务
+async function handleDemoStop(site) {
+    const { dialog, message } = createDiscreteApi(['dialog', 'message'])
+    dialog.warning({
+        title: '确认停止',
+        content: '确认停止 ' + site.siteName + ' 的演示服务吗？',
+        positiveText: '确认停止',
+        negativeText: '取消',
+        onPositiveClick: async () => {
+            site._demoStopping = true
+            try {
+                message.info('正在停止服务...')
+                useSiteDemoStopApi(site.id).then(res => {
+                    if (res.code === 200) {
+                        const result = res.data
+                        let info = ''
+                        if (result?.stopped !== undefined) {
+                            info += '🛑 停止结果：' + (result.stopped ? '✅ 已停止' : '⚠ 脚本执行返回非零退出码') + '\n'
+                            if (result.exitCode !== undefined) info += '退出码：' + result.exitCode + '\n'
+                        }
+                        if (result?.output) {
+                            info += '\n📋 输出：\n' + result.output
+                        }
+                        if (result?.stopped) {
+                            dialog.success({
+                                title: '停止成功',
+                                content: preContent(info),
+                                positiveText: '确定'
+                            })
+                        } else {
+                            dialog.warning({
+                                title: '停止结果',
+                                content: preContent(info || '未知结果'),
+                                positiveText: '确定'
+                            })
+                        }
+                    } else {
+                        dialog.error({
+                            title: '停止失败',
+                            content: preContent(res.msg || '服务端错误'),
+                            positiveText: '确定'
+                        })
+                    }
+                })
+            } catch (e) {
+                dialog.error({
+                    title: '停止失败',
+                    content: preContent(e.message || '连接异常'),
+                    positiveText: '确定'
+                })
+            } finally {
+                site._demoStopping = false
+            }
+        }
     })
 }
 
@@ -579,6 +846,7 @@ async function handleRefreshAll() {
             })
         }
     } catch (error) {
+        console.error('刷新检查失败:', error)
         const { message } = createDiscreteApi(["message"])
         message.error("刷新检查失败")
     } finally {
