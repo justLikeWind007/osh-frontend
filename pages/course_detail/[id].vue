@@ -11,8 +11,8 @@
       <CoursePay
         v-else-if="isPayingView"
         :data="courseData"
-        :loading="confirmLoading"
-        @confirm="handleConfirmPay"
+        @paid="handlePaid"
+        @cancel="handleCancel"
       />
 
       <!-- 默认：营销详情页（无论是否付费，点卡片都到这里） -->
@@ -43,7 +43,6 @@ const courseId = route.params.id;
 const courseData = ref(null);
 const isPaid = ref(false);
 const isPayingView = ref(false);
-const confirmLoading = ref(false);
 
 // 点击立即学习：跳转到支付视图
 const goToPayPage = () => {
@@ -67,18 +66,21 @@ const handleRefreshCourse = async () => {
   await refresh();
 };
 
-// 在支付页面点击“确认支付”：执行解锁逻辑
-const handleConfirmPay = async () => {
-  confirmLoading.value = true; // ✅ 对应上面新加的 ref
+// CoursePay 内部已完成"二维码 + 轮询"全流程，命中支付成功后会 emit('paid')。
+// 这里只负责把视图切回详情，并刷新课程数据以拿到后端最新的 buyFlag。
+const handlePaid = async () => {
+  isPaid.value = true;
+  isPayingView.value = false;
+  try {
+    await refresh();
+  } catch (e) {
+    // refresh 失败不阻塞解锁，下次进页面会自动重新拉取
+  }
+};
 
-  setTimeout(() => {
-    confirmLoading.value = false;
-    isPaid.value = true;
-    isPayingView.value = false;
-    // 注意：window.$message 需要你项目里配置了全局 UI 组件才能用
-    // 如果没配置，可以先用 alert('支付成功') 测试
-    window.$message?.success('支付成功，开始学习吧！');
-  }, 1500);
+// 用户在二维码视图点击"返回"
+const handleCancel = () => {
+  isPayingView.value = false;
 };
 
 // ✅ 正确 watch（可留可不留）
@@ -92,29 +94,6 @@ watch(
   },
   { immediate: true }
 );
-// --- 3. 支付/解锁逻辑 ---
-const handleFakePay = async () => {
-  // 1. 开启 Loading 弹窗 (对应你之前的 n-modal)
-  isPaying.value = true;
-  console.log('正在发起支付或验证权限...');
-
-  // 2. 这里你有两个选择：
-
-  // 方案 A：如果你已经手动改了数据库 buyFlag = 1
-  // 我们直接调用接口自带的 refresh 重新拉取最新状态
-  const { refresh } = await useCourseDetailApi(courseId);
-  await refresh();
-
-  // 方案 B：如果是做本地模拟演示，直接手动切状态
-  setTimeout(() => {
-    isPaying.value = false;
-    isPaid.value = true; // 只要这行一变，v-else 里的 CourseStudyCenter 就出来了
-    console.log('✅ 权限解锁成功');
-  }, 1500);
-
-  // 方案 C：跳转到真正的收银台页面
-  // navigateTo(`/course/pay/${courseId}`);
-};
 </script>
 
 <style scoped>
